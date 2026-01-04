@@ -57,8 +57,7 @@ export async function runPythonAgent(config: AgentConfig): Promise<string> {
   }
 
   // Create sandbox from Python-based template
-  const sandbox = await Sandbox.create({
-    template: templateId,
+  const sandbox = await Sandbox.create(templateId, {
     timeoutMs: timeout * 1000,
     metadata: {
       prompt: prompt.substring(0, 100), // For debugging
@@ -140,8 +139,7 @@ export async function runPythonAgentDetailed(config: AgentConfig): Promise<Agent
     throw new Error('CLAUDE_CODE_OAUTH_TOKEN not set')
   }
 
-  const sandbox = await Sandbox.create({
-    template: templateId,
+  const sandbox = await Sandbox.create(templateId, {
     timeoutMs: timeout * 1000,
   })
 
@@ -222,8 +220,7 @@ export async function runPythonAgentStreaming(
     console.log(chalk.gray(`Starting sandbox (template: ${templateId})...`))
   }
 
-  const sandbox = await Sandbox.create({
-    template: templateId,
+  const sandbox = await Sandbox.create(templateId, {
     timeoutMs: timeout * 1000,
   })
 

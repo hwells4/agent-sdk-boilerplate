@@ -523,8 +523,7 @@ app.get('/api/stream/agent/:sessionId', async (req: Request, res: Response) => {
   }
 
   try {
-    const sandbox = await Sandbox.create({
-      template: templateId,
+    const sandbox = await Sandbox.create(templateId, {
       timeoutMs: 120000,
     })
 
