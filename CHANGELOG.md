@@ -18,7 +18,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Basic test infrastructure with pytest
 - Validation script (scripts/validate_setup.py)
 - CHANGELOG.md for tracking changes
-- .mcp.json.example for MCP server configuration
+- Automated setup.sh with credential capture and .env auto-configuration
+  - Auto-runs `claude setup-token` and captures OAuth token
+  - Auto-runs `e2b auth login` and extracts API key
+  - Shows extracted credentials (partially masked) and asks for confirmation before writing
+  - User can decline to save and script continues (no exit on 'no')
+  - Automatically inserts credentials into .env file (with user approval)
+  - Auto-installs missing CLIs (claude, e2b)
+  - Auto-builds E2B template after credential setup
+  - Color-coded output with step-by-step progress
+  - Smart skip logic for already-configured credentials
 
 ### Changed
 - Renamed example files for clarity:
@@ -31,7 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improved validation script with better error handling and env checks
 - Removed hardcoded template ID fallback in validation script
 - Updated CLAUDE.md to remove personal Linear configuration
-- Moved .mcp.json to .mcp.json.example and gitignored .mcp.json
+- Completely rewrote setup.sh for automated onboarding experience
 
 ### Security
 - Fixed prompt injection vulnerability in `run_agent.py` using JSON serialization
@@ -44,6 +53,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Empty .claude/commands directory
 - Personal Linear team and project IDs from CLAUDE.md
 - Hardcoded template ID fallback in scripts
+- Orphaned .mcp.json.example file (MCP configs belong in agent templates, not root level)
+- Python-specific validation and testing from setup.sh (now TypeScript-first)
 
 ## [0.1.0] - Initial Release
 

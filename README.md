@@ -27,22 +27,23 @@ This SDK lets you run Claude agents in isolated sandboxes from your TypeScript/N
 ## Quick Start
 
 ```bash
-# 1. Clone the repository
+# 1. Clone and enter the repository
 git clone https://github.com/your-username/claude-agent-sdk-experiments.git
 cd claude-agent-sdk-experiments
 
-# 2. Run the setup script (configures credentials)
-./setup.sh
+# 2. Run automated setup (handles everything!)
+npm setup
 
-# 3. Install TypeScript dependencies
-npm install
-
-# 4. Build the E2B template (first time only)
-npm run build:template
-
-# 5. Run your first agent!
-npm run ts:example
+# 3. Run your first agent!
+npm run example
 ```
+
+The `npm setup` command automatically:
+- Installs all dependencies
+- Authenticates with Claude (OAuth token)
+- Authenticates with E2B (API key)
+- Builds the E2B sandbox template
+- Saves everything to `.env`
 
 ## Table of Contents
 
@@ -71,31 +72,36 @@ npm run ts:example
 
 ### Setup Steps
 
-1. **Install dependencies:**
+**One command does it all:**
 
+```bash
+npm setup
+```
+
+This automated setup script will:
+1. Install all npm dependencies
+2. Guide you through Claude authentication (browser-based OAuth)
+3. Guide you through E2B authentication
+4. Auto-extract and save credentials to `.env`
+5. Build the E2B sandbox template
+6. Verify everything is ready
+
+**Manual setup** (if you prefer):
+
+<details>
+<summary>Click to expand manual steps</summary>
+
+1. Install dependencies: `npm install`
+2. Get Claude token: `claude setup-token`
+3. Get E2B key: `e2b auth login` (or from [e2b.dev/dashboard](https://e2b.dev/dashboard))
+4. Create `.env` file with your credentials:
    ```bash
-   npm install
+   CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat...
+   E2B_API_KEY=e2b_...
    ```
+5. Build template: `npm run build:template`
 
-2. **Run the interactive setup:**
-
-   ```bash
-   ./setup.sh
-   ```
-
-   The setup script will guide you through:
-   - Creating a `.env` file
-   - Setting up your Claude OAuth token
-   - Configuring your E2B API key
-   - Verifying your setup
-
-3. **Build the E2B template:**
-
-   ```bash
-   npm run build:template
-   ```
-
-   This creates a sandbox template with Claude Code and the Agent SDK pre-installed. The template uses Python internally, but you don't need to write any Python code.
+</details>
 
 ## Configuration
 
@@ -294,7 +300,7 @@ claude-agent-sdk-experiments/
 ├── .claude/                     # Claude Code configuration
 │   ├── settings.json            # MCP servers and permissions
 │   └── skills/                  # Custom skills
-├── setup.sh                     # Interactive setup script
+├── setup.sh                     # Automated setup script (run via: npm setup)
 ├── package.json                 # Node.js dependencies
 ├── tsconfig.json                # TypeScript configuration
 ├── .env.example                 # Environment template
