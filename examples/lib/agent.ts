@@ -64,9 +64,6 @@ export async function runPythonAgent(config: AgentConfig): Promise<string> {
     },
   })
 
-  // Set OAuth token as environment variable
-  await sandbox.commands.run(`export CLAUDE_CODE_OAUTH_TOKEN="${oauthToken}"`)
-
   try {
     if (verbose) {
       console.log('Sandbox started. Running Python agent...')
@@ -100,6 +97,9 @@ asyncio.run(main())
       'python3 /home/user/agent.py',
       {
         timeoutMs: timeout * 1000,
+        envs: {
+          CLAUDE_CODE_OAUTH_TOKEN: oauthToken,
+        },
       }
     )
 
@@ -143,8 +143,6 @@ export async function runPythonAgentDetailed(config: AgentConfig): Promise<Agent
     timeoutMs: timeout * 1000,
   })
 
-  await sandbox.commands.run(`export CLAUDE_CODE_OAUTH_TOKEN="${oauthToken}"`)
-
   try {
     const pythonAgentCode = `
 import asyncio
@@ -168,7 +166,12 @@ asyncio.run(main())
     await sandbox.files.write('/home/user/agent.py', pythonAgentCode)
     const execution = await sandbox.commands.run(
       'python3 /home/user/agent.py',
-      { timeoutMs: timeout * 1000 }
+      {
+        timeoutMs: timeout * 1000,
+        envs: {
+          CLAUDE_CODE_OAUTH_TOKEN: oauthToken,
+        },
+      }
     )
 
     return {
@@ -223,8 +226,6 @@ export async function runPythonAgentStreaming(
   const sandbox = await Sandbox.create(templateId, {
     timeoutMs: timeout * 1000,
   })
-
-  await sandbox.commands.run(`export CLAUDE_CODE_OAUTH_TOKEN="${oauthToken}"`)
 
   try {
     if (verbose) {
@@ -318,6 +319,9 @@ if __name__ == "__main__":
 
     await sandbox.commands.run('python3 /home/user/streaming_agent.py', {
       timeoutMs: timeout * 1000,
+      envs: {
+        CLAUDE_CODE_OAUTH_TOKEN: oauthToken,
+      },
       onStdout: streamHandler,
       onStderr: (data) => {
         console.error(chalk.red(`[STDERR] ${data}`))

@@ -527,8 +527,6 @@ app.get('/api/stream/agent/:sessionId', async (req: Request, res: Response) => {
       timeoutMs: 120000,
     })
 
-    await sandbox.commands.run(`export CLAUDE_CODE_OAUTH_TOKEN="${oauthToken}"`)
-
     // Enhanced Python streaming agent code with all event types
     const pythonStreamingCode = `
 import asyncio
@@ -604,6 +602,9 @@ if __name__ == "__main__":
 
     await sandbox.commands.run('python3 /home/user/streaming_agent.py', {
       timeoutMs: 120000,
+      envs: {
+        CLAUDE_CODE_OAUTH_TOKEN: oauthToken,
+      },
       onStdout: (data) => {
         buffer += data
         const lines = buffer.split('\n')
