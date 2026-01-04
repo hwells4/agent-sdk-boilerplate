@@ -8,7 +8,6 @@
  */
 
 import { Sandbox } from '@e2b/code-interpreter'
-import chalk from 'chalk'
 import { createConsoleStreamHandler, createLineBufferedHandler, StreamCallbacks } from './streaming'
 
 export interface AgentConfig {
@@ -220,7 +219,7 @@ export async function runPythonAgentStreaming(
   }
 
   if (verbose) {
-    console.log(chalk.gray(`Starting sandbox (template: ${templateId})...`))
+    console.log(`Starting sandbox (template: ${templateId})...`)
   }
 
   const sandbox = await Sandbox.create(templateId, {
@@ -229,7 +228,7 @@ export async function runPythonAgentStreaming(
 
   try {
     if (verbose) {
-      console.log(chalk.gray('Sandbox started. Running Python agent with streaming...\n'))
+      console.log('Sandbox started. Running Python agent with streaming...\n')
     }
 
     // Python streaming agent code
@@ -324,19 +323,19 @@ if __name__ == "__main__":
       },
       onStdout: streamHandler,
       onStderr: (data) => {
-        console.error(chalk.red(`[STDERR] ${data}`))
+        console.error(`[STDERR] ${data}`)
       },
     })
 
     if (verbose) {
-      console.log(chalk.gray('\nAgent completed successfully'))
+      console.log('\nAgent completed successfully')
     }
 
     return finalResult
   } finally {
     await sandbox.kill()
     if (verbose) {
-      console.log(chalk.gray('Sandbox terminated'))
+      console.log('Sandbox terminated')
     }
   }
 }

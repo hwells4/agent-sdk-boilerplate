@@ -9,14 +9,13 @@
 
 import 'dotenv/config'
 import { runPythonAgentStreaming } from './lib/agent'
-import chalk from 'chalk'
 
 async function example1_BasicStreaming() {
   console.log('\n' + '='.repeat(60))
-  console.log(chalk.bold.cyan('Example 1: Basic Streaming'))
+  console.log('Example 1: Basic Streaming')
   console.log('='.repeat(60) + '\n')
 
-  console.log(chalk.gray('Task: List the first 5 prime numbers\n'))
+  console.log('Task: List the first 5 prime numbers\n')
 
   await runPythonAgentStreaming({
     prompt: 'List the first 5 prime numbers with a brief explanation of what makes them prime.',
@@ -26,10 +25,10 @@ async function example1_BasicStreaming() {
 
 async function example2_ToolUsageStreaming() {
   console.log('\n' + '='.repeat(60))
-  console.log(chalk.bold.cyan('Example 2: Tool Usage with Streaming'))
+  console.log('Example 2: Tool Usage with Streaming')
   console.log('='.repeat(60) + '\n')
 
-  console.log(chalk.gray('Task: Create and read a file (watch for 🔧 yellow tool calls)\n'))
+  console.log('Task: Create and read a file (watch for 🔧 tool calls)\n')
 
   let toolCount = 0
 
@@ -39,27 +38,27 @@ async function example2_ToolUsageStreaming() {
     onStream: {
       onToolUse: (id, name, input) => {
         toolCount++
-        console.log(chalk.gray(`  [Debug] Tool #${toolCount}: ${name} (ID: ${id.substring(0, 8)}...)`))
+        console.log(`  [Debug] Tool #${toolCount}: ${name} (ID: ${id.substring(0, 8)}...)`)
       },
       onToolResult: (toolUseId, content, isError) => {
         if (isError) {
-          console.log(chalk.red(`  [Debug] Tool ${toolUseId.substring(0, 8)} failed`))
+          console.log(`  [Debug] Tool ${toolUseId.substring(0, 8)} failed`)
         } else {
-          console.log(chalk.gray(`  [Debug] Tool ${toolUseId.substring(0, 8)} succeeded`))
+          console.log(`  [Debug] Tool ${toolUseId.substring(0, 8)} succeeded`)
         }
       },
     },
   })
 
-  console.log(chalk.gray(`\nTotal tools used: ${toolCount}`))
+  console.log(`\nTotal tools used: ${toolCount}`)
 }
 
 async function example3_CustomCallbacks() {
   console.log('\n' + '='.repeat(60))
-  console.log(chalk.bold.cyan('Example 3: Custom Stream Callbacks with Statistics'))
+  console.log('Example 3: Custom Stream Callbacks with Statistics')
   console.log('='.repeat(60) + '\n')
 
-  console.log(chalk.gray('Task: Directory listing (collecting statistics)\n'))
+  console.log('Task: Directory listing (collecting statistics)\n')
 
   const stats = {
     textChunks: 0,
@@ -86,13 +85,13 @@ async function example3_CustomCallbacks() {
         stats.durationMs = durationMs
       },
       onComplete: (status) => {
-        console.log('\n' + chalk.bold('📊 Execution Statistics:'))
-        console.log(chalk.gray(`  • Text chunks: ${stats.textChunks}`))
-        console.log(chalk.gray(`  • Tools used: ${stats.toolsUsed}`))
-        console.log(chalk.gray(`  • Thinking blocks: ${stats.thinkingBlocks}`))
-        console.log(chalk.gray(`  • Duration: ${(stats.durationMs / 1000).toFixed(2)}s`))
-        console.log(chalk.gray(`  • Cost: $${stats.totalCost.toFixed(4)}`))
-        console.log(chalk.gray(`  • Status: ${status}`))
+        console.log('\n📊 Execution Statistics:')
+        console.log(`  • Text chunks: ${stats.textChunks}`)
+        console.log(`  • Tools used: ${stats.toolsUsed}`)
+        console.log(`  • Thinking blocks: ${stats.thinkingBlocks}`)
+        console.log(`  • Duration: ${(stats.durationMs / 1000).toFixed(2)}s`)
+        console.log(`  • Cost: $${stats.totalCost.toFixed(4)}`)
+        console.log(`  • Status: ${status}`)
       },
     },
   })
@@ -100,10 +99,10 @@ async function example3_CustomCallbacks() {
 
 async function example4_ErrorHandling() {
   console.log('\n' + '='.repeat(60))
-  console.log(chalk.bold.cyan('Example 4: Error Handling'))
+  console.log('Example 4: Error Handling')
   console.log('='.repeat(60) + '\n')
 
-  console.log(chalk.gray('Task: Attempt to read a non-existent file (watch for ❌ errors)\n'))
+  console.log('Task: Attempt to read a non-existent file (watch for ❌ errors)\n')
 
   let errorCaught = false
 
@@ -112,27 +111,27 @@ async function example4_ErrorHandling() {
     onStream: {
       onError: (error, message) => {
         errorCaught = true
-        console.log(chalk.yellow(`\n[Error Handler] Caught error: ${error}`))
+        console.log(`\n[Error Handler] Caught error: ${error}`)
       },
       onToolResult: (toolUseId, content, isError) => {
         if (isError) {
-          console.log(chalk.yellow(`[Error Handler] Tool failed: ${content.substring(0, 100)}`))
+          console.log(`[Error Handler] Tool failed: ${content.substring(0, 100)}`)
         }
       },
     },
   })
 
   if (errorCaught) {
-    console.log(chalk.yellow('\n⚠️  Errors were handled gracefully'))
+    console.log('\n⚠️  Errors were handled gracefully')
   }
 }
 
 async function example5_LongRunningTask() {
   console.log('\n' + '='.repeat(60))
-  console.log(chalk.bold.cyan('Example 5: Long-Running Task with Progress'))
+  console.log('Example 5: Long-Running Task with Progress')
   console.log('='.repeat(60) + '\n')
 
-  console.log(chalk.gray('Task: Multiple operations (see real-time progress)\n'))
+  console.log('Task: Multiple operations (see real-time progress)\n')
 
   let startTime = Date.now()
   let lastUpdate = Date.now()
@@ -143,13 +142,13 @@ async function example5_LongRunningTask() {
     onStream: {
       onToolUse: (id, name, input) => {
         const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)
-        console.log(chalk.gray(`  [${elapsed}s] Tool started: ${name}`))
+        console.log(`  [${elapsed}s] Tool started: ${name}`)
       },
       onText: (text) => {
         const now = Date.now()
         if (now - lastUpdate > 500) {  // Throttle updates
           const elapsed = ((now - startTime) / 1000).toFixed(1)
-          console.log(chalk.gray(`  [${elapsed}s] Agent responding...`))
+          console.log(`  [${elapsed}s] Agent responding...`)
           lastUpdate = now
         }
       },
@@ -157,22 +156,22 @@ async function example5_LongRunningTask() {
   })
 
   const totalTime = ((Date.now() - startTime) / 1000).toFixed(2)
-  console.log(chalk.gray(`\nTotal wall clock time: ${totalTime}s`))
+  console.log(`\nTotal wall clock time: ${totalTime}s`)
 }
 
 async function main() {
   console.log('\n' + '='.repeat(60))
-  console.log(chalk.bold.green('🎨 Claude Agent Console Streaming Examples'))
-  console.log(chalk.gray('Demonstrating real-time streaming with colored output'))
+  console.log('🎨 Claude Agent Console Streaming Examples')
+  console.log('Demonstrating real-time streaming with emoji visual markers')
   console.log('='.repeat(60))
 
-  console.log(chalk.bold('\nColor Scheme:'))
-  console.log(chalk.yellow.bold('  🔧 Yellow = Tool calls (Bash, Read, Write)'))
-  console.log(chalk.white('  💬 White = Agent text responses'))
-  console.log(chalk.magenta.dim('  🤔 Magenta = Extended thinking'))
-  console.log(chalk.blue('  📦 Blue = Tool results'))
-  console.log(chalk.red.bold('  ❌ Red = Errors'))
-  console.log(chalk.green.bold('  ✅ Green = Success/completion'))
+  console.log('\nEmoji Legend:')
+  console.log('  🔧 = Tool calls (Bash, Read, Write)')
+  console.log('  💬 = Agent text responses')
+  console.log('  🤔 = Extended thinking')
+  console.log('  📦 = Tool results')
+  console.log('  ❌ = Errors')
+  console.log('  ✅ = Success/completion')
 
   try {
     await example1_BasicStreaming()
@@ -182,12 +181,12 @@ async function main() {
     await example5_LongRunningTask()
 
     console.log('\n' + '='.repeat(60))
-    console.log(chalk.bold.green('✅ All examples completed successfully!'))
+    console.log('✅ All examples completed successfully!')
     console.log('='.repeat(60) + '\n')
   } catch (error) {
-    console.error(chalk.red('\n💥 Fatal Error:'), error)
+    console.error('\n💥 Fatal Error:', error)
     if (error instanceof Error) {
-      console.error(chalk.red(error.stack))
+      console.error(error.stack)
     }
     process.exit(1)
   }

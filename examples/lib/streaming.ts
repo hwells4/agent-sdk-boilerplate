@@ -1,11 +1,9 @@
 /**
  * Streaming utilities for Claude Agent SDK
  *
- * Provides colored terminal output and event parsing for real-time
+ * Provides emoji-based visual distinction and event parsing for real-time
  * agent responses streamed from E2B sandboxes.
  */
-
-import chalk from 'chalk'
 
 /**
  * Stream event types emitted by Python agents
@@ -60,20 +58,20 @@ export function parseStreamEvent(line: string): StreamEvent | null {
 }
 
 /**
- * Create a console stream handler with colored output
+ * Create a console stream handler with emoji-based visual distinction
  *
  * This function creates a handler that:
  * - Parses JSON events from stdout
- * - Formats them with colors and emojis
+ * - Formats them with emojis for visual distinction
  * - Invokes optional callbacks
  *
- * Color scheme:
- * - Tool calls: yellow bold 🔧
- * - Text: white 💬
- * - Thinking: magenta dim 🤔
- * - Errors: red bold ❌
- * - Results: green bold ✅
- * - Tool results: blue 📦
+ * Visual scheme:
+ * - Tool calls: 🔧
+ * - Text: 💬
+ * - Thinking: 🤔
+ * - Errors: ❌
+ * - Results: ✅
+ * - Tool results: 📦
  *
  * @param callbacks - Optional callbacks for each event type
  * @returns Handler function for stdout data
@@ -89,12 +87,12 @@ export function createConsoleStreamHandler(callbacks?: StreamCallbacks) {
 
     switch (event.type) {
       case 'start':
-        console.log(chalk.cyan.bold('🚀 Starting agent...'))
+        console.log('🚀 Starting agent...')
         if (callbacks?.onStart) callbacks.onStart(event.data)
         break
 
       case 'text':
-        process.stdout.write(chalk.white('💬 '))
+        process.stdout.write('💬 ')
         process.stdout.write(event.data.text)
         if (callbacks?.onText) callbacks.onText(event.data.text)
         break
@@ -102,7 +100,7 @@ export function createConsoleStreamHandler(callbacks?: StreamCallbacks) {
       case 'thinking':
         const thinkingPreview = event.data.thinking.substring(0, 100)
         const hasMore = event.data.thinking.length > 100
-        console.log(chalk.magenta.dim(`🤔 Thinking: ${thinkingPreview}${hasMore ? '...' : ''}`))
+        console.log(`🤔 Thinking: ${thinkingPreview}${hasMore ? '...' : ''}`)
         if (callbacks?.onThinking) {
           callbacks.onThinking(event.data.thinking, event.data.signature || '')
         }
@@ -110,7 +108,7 @@ export function createConsoleStreamHandler(callbacks?: StreamCallbacks) {
 
       case 'tool_use':
         const toolInput = formatToolInput(event.data.input)
-        console.log(chalk.yellow.bold(`🔧 Tool: ${event.data.name}(${toolInput})`))
+        console.log(`🔧 Tool: ${event.data.name}(${toolInput})`)
         if (callbacks?.onToolUse) {
           callbacks.onToolUse(event.data.id, event.data.name, event.data.input)
         }
@@ -119,8 +117,7 @@ export function createConsoleStreamHandler(callbacks?: StreamCallbacks) {
       case 'tool_result':
         const resultPreview = event.data.content?.substring(0, 80) || ''
         const hasMoreResult = event.data.content?.length > 80
-        const resultColor = event.data.is_error ? chalk.red : chalk.blue
-        console.log(resultColor(`📦 Result: ${resultPreview}${hasMoreResult ? '...' : ''}`))
+        console.log(`📦 Result: ${resultPreview}${hasMoreResult ? '...' : ''}`)
         if (callbacks?.onToolResult) {
           callbacks.onToolResult(
             event.data.tool_use_id,
@@ -131,7 +128,7 @@ export function createConsoleStreamHandler(callbacks?: StreamCallbacks) {
         break
 
       case 'error':
-        console.log(chalk.red.bold(`❌ Error: ${event.data.message}`))
+        console.log(`❌ Error: ${event.data.message}`)
         if (callbacks?.onError) {
           callbacks.onError(event.data.error, event.data.message)
         }
@@ -140,7 +137,7 @@ export function createConsoleStreamHandler(callbacks?: StreamCallbacks) {
       case 'result':
         const cost = event.data.cost?.toFixed(4) || 'N/A'
         const duration = ((event.data.duration_ms || 0) / 1000).toFixed(2)
-        console.log(chalk.green.bold(`✅ Complete (${duration}s, $${cost})`))
+        console.log(`✅ Complete (${duration}s, $${cost})`)
         if (callbacks?.onResult) {
           callbacks.onResult(
             event.data.result,
@@ -152,8 +149,7 @@ export function createConsoleStreamHandler(callbacks?: StreamCallbacks) {
 
       case 'complete':
         const icon = event.data.status === 'success' ? '✨' : '⚠️'
-        const statusColor = event.data.status === 'success' ? chalk.green : chalk.yellow
-        console.log(statusColor.bold(`${icon} Agent finished: ${event.data.status}`))
+        console.log(`${icon} Agent finished: ${event.data.status}`)
         if (callbacks?.onComplete) {
           callbacks.onComplete(event.data.status, event.data.result)
         }
@@ -161,7 +157,7 @@ export function createConsoleStreamHandler(callbacks?: StreamCallbacks) {
 
       default:
         // Unknown event type, log for debugging
-        console.log(chalk.gray(`[Unknown event: ${event.type}]`))
+        console.log(`[Unknown event: ${event.type}]`)
     }
   }
 }
