@@ -137,14 +137,48 @@ fi
 echo ""
 
 if [ "$all_good" = true ]; then
-    echo "Ready! Run an agent with:"
+    echo "All configured! Testing Claude Agent SDK..."
     echo ""
-    echo "   source .venv/bin/activate"
-    echo "   python run_agent.py \"Your prompt here\""
-    echo ""
-    echo "Or run the test:"
-    echo ""
-    echo "   python scripts/test_sandbox.py"
+
+    # Quick SDK test
+    test_result=$(source .venv/bin/activate && python3 -c "
+import asyncio
+import sys
+from claude_agent_sdk import query
+
+async def test():
+    try:
+        async for msg in query(prompt='Say OK'):
+            if hasattr(msg, 'result'):
+                print(msg.result)
+                return True
+    except Exception as e:
+        print(f'Error: {e}', file=sys.stderr)
+        return False
+
+result = asyncio.run(test())
+sys.exit(0 if result else 1)
+" 2>&1)
+
+    if [ $? -eq 0 ]; then
+        echo "   ✅ SDK Test: $test_result"
+        echo ""
+        echo "🎉 Everything works! Ready to run agents:"
+        echo ""
+        echo "   source .venv/bin/activate"
+        echo "   python run_agent.py \"Your prompt here\""
+        echo ""
+        echo "Or validate your sandbox:"
+        echo ""
+        echo "   python scripts/validate_setup.py"
+    else
+        echo "   ⚠️  SDK test failed (check your OAuth token)"
+        echo ""
+        echo "You can still run agents, but authentication may not work."
+        echo "Run the validation script for more details:"
+        echo ""
+        echo "   python scripts/validate_setup.py"
+    fi
 else
-    echo "Fix the issues above, then run: ./onboarding.sh"
+    echo "Fix the issues above, then run: ./setup.sh"
 fi

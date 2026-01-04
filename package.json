@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "Claude Agent SDK running in E2B sandboxes",
   "scripts": {
-    "onboarding": "./onboarding.sh",
+    "setup": "./setup.sh",
     "agent": "source .venv/bin/activate && python run_agent.py",
     "validate": "source .venv/bin/activate && python scripts/validate_setup.py",
     "build:template": "cd agents/base && source ../../.venv/bin/activate && python build_dev.py"

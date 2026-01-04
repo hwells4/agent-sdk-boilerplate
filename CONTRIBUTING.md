@@ -16,9 +16,8 @@ Thank you for your interest in contributing! This document provides guidelines f
 ## Development Setup
 
 1. Install Python 3.12+
-2. Install dependencies: `pip install -e .`
-3. Copy `.env.example` to `.env` and add your API keys
-4. Run the onboarding script: `python onboarding.py`
+2. Run the setup script: `./setup.sh`
+3. This will create a virtual environment, install dependencies, and guide you through configuration
 
 ## Code Style
 

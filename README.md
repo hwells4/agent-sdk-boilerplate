@@ -20,8 +20,8 @@ This project demonstrates how to integrate the [Claude Agent SDK](https://platfo
 git clone https://github.com/your-username/claude-agent-sdk-experiments.git
 cd claude-agent-sdk-experiments
 
-# 2. Run the onboarding script
-./onboarding.sh
+# 2. Run the setup script
+./setup.sh
 
 # 3. Build the E2B template (first time only)
 npm run build:template
@@ -61,17 +61,14 @@ python run_agent.py "What is the capital of France?"
    pip install -r requirements.txt
    ```
 
-2. **Run the interactive onboarding:**
+2. **Run the interactive setup:**
 
    ```bash
-   # Using bash
-   ./onboarding.sh
-
-   # Or using Python
-   python onboarding.py
+   ./setup.sh
+   # Or: npm run setup
    ```
 
-   The onboarding script will guide you through:
+   The setup script will guide you through:
    - Creating a `.env` file
    - Setting up your Claude OAuth token
    - Configuring your E2B API key
@@ -201,8 +198,7 @@ claude-agent-sdk-experiments/
 │   ├── hooks/                   # Event hooks
 │   └── skills/                  # Custom skills
 ├── run_agent.py                 # Main entry point
-├── onboarding.py                # Python setup wizard
-├── onboarding.sh                # Bash setup wizard
+├── setup.sh                     # Interactive setup script
 ├── requirements.txt             # Python dependencies
 ├── .env.example                 # Environment template
 ├── .mcp.json.example            # MCP server configuration example

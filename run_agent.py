@@ -39,9 +39,9 @@ async def run_agent(prompt: str, timeout: int = 120, verbose: bool = False) -> s
     oauth_token = os.getenv("CLAUDE_CODE_OAUTH_TOKEN")
 
     if not template_id:
-        raise ValueError("E2B_TEMPLATE_ID not set. Run: ./onboarding.sh")
+        raise ValueError("E2B_TEMPLATE_ID not set. Run: ./setup.sh")
     if not oauth_token:
-        raise ValueError("CLAUDE_CODE_OAUTH_TOKEN not set. Run: ./onboarding.sh")
+        raise ValueError("CLAUDE_CODE_OAUTH_TOKEN not set. Run: ./setup.sh")
 
     # Agent code to run inside sandbox
     # Use json.dumps to safely escape the prompt
