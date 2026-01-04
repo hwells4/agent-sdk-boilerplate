@@ -8,5 +8,8 @@ template = (
     # Install Claude Code CLI
     .run_cmd("sudo npm install -g @anthropic-ai/claude-code@latest")
     # Install Python dependencies
-    .run_cmd("pip install claude-agent-sdk httpx pydantic python-dotenv")
+    .run_cmd(
+        "pip install claude-agent-sdk httpx pydantic python-dotenv braintrust "
+        "opentelemetry-api opentelemetry-sdk"
+    )
 )
