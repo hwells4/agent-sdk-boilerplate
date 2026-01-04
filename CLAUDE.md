@@ -1,38 +1,32 @@
 # Claude Agent SDK Experiments
 
-## Linear Integration
+This project demonstrates how to run Claude agents in isolated E2B sandboxes.
 
-When working with Linear issues in this project, use these IDs:
+## Optional: Linear Integration
 
-**Team:** Personal
-- ID: `ba448a94-9034-45a1-8130-85262a1b45bd`
-- Prefix: `PER`
+If you want to use Linear for issue tracking with Claude Code, you can configure the Linear MCP server:
 
-**Project:** Claude Agent SDK Experiments
-- ID: `3971156d-d0f5-47ea-8f12-c1a11583254d`
+1. Install the Linear MCP server (see `.mcp.json.example`)
+2. Get your Linear team and project IDs from Linear's API
+3. Update this file with your specific configuration
+
+### Example Linear Integration
+
+```markdown
+**Team:** YourTeam
+- ID: `your-team-id`
+- Prefix: `ABC`
+
+**Project:** YourProject
+- ID: `your-project-id`
 
 ### Creating Issues
 
-```
 mcp__linear-server__create_issue
-  team: "Personal"
-  project: "Claude Agent SDK Experiments"
+  team: "YourTeam"
+  project: "YourProject"
   title: "Your issue title"
   description: "Description in markdown"
 ```
 
-### Listing Project Issues
-
-```
-mcp__linear-server__list_issues
-  team: "Personal"
-  project: "Claude Agent SDK Experiments"
-```
-
-### Getting an Issue
-
-Use the `PER-XX` identifier format:
-```
-mcp__linear-server__get_issue
-  id: "PER-68"
-```
+You can remove this section entirely if you don't use Linear.

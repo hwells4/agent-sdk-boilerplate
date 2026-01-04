@@ -80,18 +80,24 @@ async def run_agent(request: AgentRequest):
     if not all([TEMPLATE_ID, OAUTH_TOKEN, E2B_API_KEY]):
         raise HTTPException(status_code=500, detail="Server not configured. Run onboarding.py")
 
-    # Build the agent script
+    # Build the agent script using json for safe serialization
+    import json
+
     agent_code = f'''
 import asyncio
+import json
 from claude_agent_sdk import query, ClaudeAgentOptions
 
 async def main():
     result = None
+    prompt = json.loads({json.dumps(json.dumps(request.prompt))})
+    allowed_tools = json.loads({json.dumps(json.dumps(request.allowed_tools))})
+
     async for msg in query(
-        prompt="""{request.prompt}""",
+        prompt=prompt,
         options=ClaudeAgentOptions(
             model="{request.model}",
-            allowed_tools={request.allowed_tools},
+            allowed_tools=allowed_tools,
             max_turns=20
         )
     ):

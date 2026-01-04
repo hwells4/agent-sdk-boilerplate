@@ -42,8 +42,9 @@ def sync_workspace(sandbox: Sandbox, local_path: Path) -> None:
             relative = file_path.relative_to(local_path)
             sandbox_path = f"/home/user/workspace/{relative}"
 
-            # Create parent directories
-            sandbox.commands.run(f"mkdir -p $(dirname {sandbox_path})")
+            # Create parent directories using proper path escaping
+            parent_dir = str(Path(sandbox_path).parent)
+            sandbox.commands.run(f"mkdir -p {shlex.quote(parent_dir)}")
 
             # Upload file
             content = file_path.read_bytes()
@@ -69,7 +70,7 @@ def run_agent(
 
     if prompt:
         # Non-interactive mode with a specific prompt
-        cmd_parts.extend(["--print", f'"{prompt}"'])
+        cmd_parts.extend(["--print", shlex.quote(prompt)])
         interactive = False
 
     cmd = " ".join(cmd_parts)
@@ -86,7 +87,7 @@ def run_agent(
         try:
             user_input = input("> ")
             if user_input.strip():
-                cmd = f'cd /home/user/agent && claude --dangerously-skip-permissions --print "{user_input}"'
+                cmd = f'cd /home/user/agent && claude --dangerously-skip-permissions --print {shlex.quote(user_input)}'
                 result = sandbox.commands.run(cmd, timeout=300)
                 print(result.stdout)
                 if result.stderr:
