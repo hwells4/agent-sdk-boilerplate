@@ -1,0 +1,27 @@
+.PHONY: e2b\:build\:dev e2b\:build\:prod test clean help
+
+help:
+	@echo "{{AGENT_NAME}} - Available commands:"
+	@echo ""
+	@echo "  make e2b:build:dev    - Build development template"
+	@echo "  make e2b:build:prod   - Build production template"
+	@echo "  make test             - Run example script"
+	@echo "  make clean            - Clean build artifacts"
+
+e2b\:build\:dev:
+	@echo "Building development template..."
+	@python build_dev.py
+
+e2b\:build\:prod:
+	@echo "Building production template..."
+	@python build_prod.py
+
+test:
+	@echo "Running example script..."
+	@python examples/run_{{AGENT_NAME}}.py
+
+clean:
+	@echo "Cleaning build artifacts..."
+	@find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+	@find . -type f -name "*.pyc" -delete 2>/dev/null || true
+	@echo "✅ Clean complete"

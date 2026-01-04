@@ -1,0 +1,161 @@
+# {{AGENT_TITLE}}
+
+{{AGENT_DESCRIPTION}}
+
+## Overview
+
+**Purpose:** {{AGENT_PURPOSE}}
+
+**Key Features:**
+{{#FEATURES}}
+- {{.}}
+{{/FEATURES}}
+
+## Prerequisites
+
+- E2B API key ([get one here](https://e2b.dev/docs))
+- Claude Code OAuth token ([docs](https://platform.claude.com/docs))
+{{#ADDITIONAL_PREREQS}}
+- {{.}}
+{{/ADDITIONAL_PREREQS}}
+
+## Setup
+
+### 1. Set Environment Variables
+
+```bash
+export E2B_API_KEY="your-e2b-api-key"
+export CLAUDE_CODE_OAUTH_TOKEN="your-claude-oauth-token"
+{{#ENV_VARS}}
+export {{ENV_VAR_NAME}}="{{ENV_VAR_DESCRIPTION}}"
+{{/ENV_VARS}}
+```
+
+### 2. Build the Template
+
+```bash
+cd agents/{{AGENT_NAME}}
+python build_dev.py
+```
+
+This will output a template ID. Save it:
+
+```bash
+export E2B_TEMPLATE_ID="your-template-id-from-build"
+```
+
+### 3. Run the Agent
+
+```bash
+python examples/run_{{AGENT_NAME}}.py
+```
+
+## Usage
+
+{{USAGE_INSTRUCTIONS}}
+
+## Example
+
+```python
+{{USAGE_EXAMPLE}}
+```
+
+## Configuration
+
+### Agent Instructions
+
+Edit `CLAUDE.md` to customize agent behavior, capabilities, and safety rules.
+
+### Permissions
+
+Edit `.claude/settings.json` to modify:
+- Allowed/denied bash commands
+- File access permissions
+- MCP server configurations
+- Tool permissions
+
+### Dependencies
+
+Edit `template.py` to add:
+- System packages (apt)
+- Python packages (pip)
+- Node packages (npm)
+
+## Architecture
+
+**Base image:** {{BASE_IMAGE}}
+
+**Permissions level:** {{PERMISSION_LEVEL}}
+
+**MCP servers:** {{#MCP_LIST}}{{.}}{{#NOT_LAST}}, {{/NOT_LAST}}{{/MCP_LIST}}{{^MCP_LIST}}None{{/MCP_LIST}}
+
+**Key dependencies:**
+{{#DEPENDENCIES}}
+- {{.}}
+{{/DEPENDENCIES}}
+
+## Development
+
+### Rebuild Template
+
+After making changes to `template.py`:
+
+```bash
+python build_dev.py
+```
+
+### Production Build
+
+For production deployments:
+
+```bash
+python build_prod.py
+```
+
+### Makefile Commands
+
+```bash
+make e2b:build:dev    # Build development template
+make e2b:build:prod   # Build production template
+make test             # Run tests
+make clean            # Clean build artifacts
+```
+
+## Troubleshooting
+
+{{#TROUBLESHOOTING}}
+### {{ISSUE_TITLE}}
+
+{{ISSUE_DESCRIPTION}}
+
+**Solution:**
+{{ISSUE_SOLUTION}}
+
+{{/TROUBLESHOOTING}}
+
+### Common Issues
+
+**Template build fails:**
+- Ensure E2B_API_KEY is set and valid
+- Check that all dependencies are available
+- Review build logs for specific errors
+
+**Agent doesn't start:**
+- Verify template ID is correct
+- Check OAuth token is valid
+- Ensure sandbox has network access (if needed)
+
+**Permission denied errors:**
+- Review `.claude/settings.json` permissions
+- Ensure commands are in the allow list
+- Check file paths are accessible
+
+## Documentation
+
+- [E2B Documentation](https://e2b.dev/docs)
+- [Claude Agent SDK](https://platform.claude.com/docs/agent-sdk)
+- [Claude Code CLI](https://github.com/anthropics/claude-code)
+
+## License
+
+{{LICENSE}}

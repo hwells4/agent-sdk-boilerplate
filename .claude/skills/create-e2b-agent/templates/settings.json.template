@@ -1,0 +1,75 @@
+{
+  "mcpServers": {
+    {{#MCP_MEMORY}}
+    "memory": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-memory"]
+    }{{#HAS_MORE_MCP}},{{/HAS_MORE_MCP}}
+    {{/MCP_MEMORY}}
+    {{#MCP_FILESYSTEM}}
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/home/user/workspace"]
+    }{{#HAS_MORE_MCP}},{{/HAS_MORE_MCP}}
+    {{/MCP_FILESYSTEM}}
+    {{#MCP_BROWSER}}
+    "browser": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-playwright"]
+    }{{#HAS_MORE_MCP}},{{/HAS_MORE_MCP}}
+    {{/MCP_BROWSER}}
+    {{#MCP_POSTGRES}}
+    "postgres": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres", "${POSTGRES_CONNECTION_STRING}"],
+      "env": {
+        "POSTGRES_CONNECTION_STRING": "${POSTGRES_CONNECTION_STRING}"
+      }
+    }{{#HAS_MORE_MCP}},{{/HAS_MORE_MCP}}
+    {{/MCP_POSTGRES}}
+    {{#MCP_GITHUB}}
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_TOKEN": "${GITHUB_TOKEN}"
+      }
+    }
+    {{/MCP_GITHUB}}
+  },
+  "permissions": {
+    "bash": {
+      "allow": [
+        {{#BASH_ALLOW}}
+        "{{.}}"{{#NOT_LAST}},{{/NOT_LAST}}
+        {{/BASH_ALLOW}}
+      ],
+      "deny": [
+        {{#BASH_DENY}}
+        "{{.}}"{{#NOT_LAST}},{{/NOT_LAST}}
+        {{/BASH_DENY}}
+      ]
+    },
+    "files": {
+      "allow": [
+        {{#FILES_ALLOW}}
+        "{{.}}"{{#NOT_LAST}},{{/NOT_LAST}}
+        {{/FILES_ALLOW}}
+      ],
+      "deny": [
+        {{#FILES_DENY}}
+        "{{.}}"{{#NOT_LAST}},{{/NOT_LAST}}
+        {{/FILES_DENY}}
+      ]
+    }
+    {{#TOOLS_CONFIG}}
+    ,
+    "tools": {
+      {{#DISABLE_WRITE}}
+      "Write": false,
+      "Edit": false
+      {{/DISABLE_WRITE}}
+    }
+    {{/TOOLS_CONFIG}}
+  }
+}

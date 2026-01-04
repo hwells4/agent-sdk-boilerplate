@@ -1,0 +1,73 @@
+"""
+Example usage script for {{AGENT_NAME}}
+
+This demonstrates how to create and use the {{AGENT_NAME}} agent.
+"""
+
+import asyncio
+import os
+from e2b import Sandbox
+
+
+async def main():
+    """Run the {{AGENT_NAME}} agent"""
+
+    # Get required environment variables
+    template_id = os.getenv("E2B_TEMPLATE_ID")
+    if not template_id:
+        raise ValueError(
+            "E2B_TEMPLATE_ID not set. "
+            "Build the template first: cd agents/{{AGENT_NAME}} && python build_dev.py"
+        )
+
+    oauth_token = os.getenv("CLAUDE_CODE_OAUTH_TOKEN")
+    if not oauth_token:
+        raise ValueError(
+            "CLAUDE_CODE_OAUTH_TOKEN not set. "
+            "Get your token from https://platform.claude.com"
+        )
+
+    {{#ADDITIONAL_ENV_CHECKS}}
+    {{ENV_VAR_NAME}} = os.getenv("{{ENV_VAR_NAME}}")
+    if not {{ENV_VAR_NAME}}:
+        raise ValueError("{{ENV_VAR_NAME}} not set")
+    {{/ADDITIONAL_ENV_CHECKS}}
+
+    print(f"Creating {{AGENT_NAME}} sandbox from template {template_id}...")
+
+    # Create sandbox from template
+    async with Sandbox(template=template_id, timeout=300) as sandbox:
+        print("✅ Sandbox created")
+
+        # Example task for the agent
+        task = """
+{{EXAMPLE_TASK}}
+"""
+
+        print(f"\nRunning task:\n{task}\n")
+
+        # Run Claude Code in the sandbox
+        result = await sandbox.commands.run(
+            'cd /home/user/agent && echo "{{EXAMPLE_TASK}}" | claude-code',
+            env={
+                "CLAUDE_CODE_OAUTH_TOKEN": oauth_token,
+                {{#ADDITIONAL_ENV_VARS}}
+                "{{ENV_VAR_NAME}}": {{ENV_VAR_NAME}},
+                {{/ADDITIONAL_ENV_VARS}}
+            },
+            timeout=120
+        )
+
+        # Display results
+        print("=== Agent Output ===")
+        print(result.stdout)
+
+        if result.stderr:
+            print("\n=== Errors ===")
+            print(result.stderr)
+
+        print(f"\n✅ Task completed (exit code: {result.exit_code})")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

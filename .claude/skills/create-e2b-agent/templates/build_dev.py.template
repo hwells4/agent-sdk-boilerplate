@@ -1,0 +1,17 @@
+"""
+Development build script for {{AGENT_NAME}}
+
+This builds the E2B template with a development alias for fast iteration.
+"""
+
+from template import template
+
+if __name__ == "__main__":
+    print("Building {{AGENT_NAME}} development template...")
+    template_id = template.build(alias="{{AGENT_NAME}}-dev")
+    print(f"\n✅ Development template built successfully!")
+    print(f"\nTemplate ID: {template_id}")
+    print(f"\nTo use this template:")
+    print(f"export E2B_TEMPLATE_ID={template_id}")
+    print(f"\nThen run:")
+    print(f"python examples/run_{{AGENT_NAME}}.py")

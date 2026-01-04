@@ -1,0 +1,35 @@
+"""
+E2B Template for {{AGENT_NAME}}
+
+This template defines the Docker image and dependencies for the {{AGENT_NAME}} agent.
+"""
+
+from e2b import Template
+
+template = (
+    Template()
+    .from_image("{{BASE_IMAGE}}")
+    # System dependencies
+    {{#SYSTEM_DEPS}}
+    .run_cmd("sudo apt-get update && sudo apt-get install -y {{SYSTEM_DEPS}}")
+    {{/SYSTEM_DEPS}}
+    # Global Node packages
+    .run_cmd("sudo npm install -g @anthropic-ai/claude-code@latest")
+    {{#NODE_PACKAGES}}
+    .run_cmd("sudo npm install -g {{NODE_PACKAGES}}")
+    {{/NODE_PACKAGES}}
+    # Python packages
+    .run_cmd("pip install claude-agent-sdk httpx pydantic python-dotenv")
+    {{#PYTHON_PACKAGES}}
+    .run_cmd("pip install {{PYTHON_PACKAGES}}")
+    {{/PYTHON_PACKAGES}}
+    # Copy agent configuration
+    .copy_file("CLAUDE.md", "/home/user/agent/CLAUDE.md")
+    .copy_file(".claude/settings.json", "/home/user/agent/.claude/settings.json")
+    {{#COPY_HOOKS}}
+    .copy_file(".claude/hooks/", "/home/user/agent/.claude/hooks/")
+    {{/COPY_HOOKS}}
+    {{#COPY_SKILLS}}
+    .copy_file(".claude/skills/", "/home/user/agent/.claude/skills/")
+    {{/COPY_SKILLS}}
+)
