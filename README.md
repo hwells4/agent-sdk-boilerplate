@@ -1,70 +1,115 @@
 # Claude Agent SDK Experiments
 
-Personal experiments with Claude Agent SDK for knowledge work automation.
+Run Claude Agent SDK in isolated E2B sandboxes.
 
-## Project Purpose
-
-First experiments building autonomous agents using the Claude Agent SDK. Focus on personal knowledge work automation - the kind of tasks that benefit from LLM reasoning combined with file system access.
-
-## Key Research Findings
-
-### Authentication
-- Can use Claude Max subscription via `CLAUDE_CODE_OAUTH_TOKEN`
-- No API key required for personal use
-- Same authentication model as Claude Code CLI
-
-### Architecture
-- **Claude Code IS the Agent SDK runtime** - they share the same harness
-- The SDK provides the programmatic interface to the same agent loop
-- E2B (cloud sandboxing) is optional - can run entirely locally
-- Local execution is simpler for personal knowledge work
-
-### Minimal Tool Set
-For knowledge work agents, start with just 4 tools:
-| Tool | Purpose |
-|------|---------|
-| `Read` | Read file contents |
-| `Write` | Write/overwrite files |
-| `Glob` | Find files by pattern |
-| `Grep` | Search file contents |
-
-This covers 80% of knowledge work automation needs.
-
-## Planned First Agent: Knowledge Base Organizer
-
-An agent that:
-1. Scans a directory of notes/documents
-2. Identifies organizational patterns
-3. Suggests or applies consistent structure
-4. Fixes broken links and references
-
-## Getting Started
+## Quick Start
 
 ```bash
-# Install the SDK
-pip install claude-agent-sdk
+# Setup
+./onboarding.sh
 
-# Set up authentication (if using Claude Max)
-export CLAUDE_CODE_OAUTH_TOKEN="your-token"
-
-# Or use API key
-export ANTHROPIC_API_KEY="your-key"
+# Run an agent
+source .venv/bin/activate
+python run_agent.py "What is 2 + 2?"
 ```
-
-## Official Documentation
-
-- [Agent SDK Overview](https://platform.claude.com/docs/en/agent-sdk/overview)
-- [claude-agent-sdk-python](https://github.com/anthropics/claude-agent-sdk-python)
 
 ## Project Structure
 
 ```
 .
-├── agents/           # Agent implementations
-├── tools/            # Custom tool definitions
-├── experiments/      # One-off experiments
-└── docs/             # Notes and learnings
+├── agents/                  # Agent sandbox templates
+│   └── base/               # Base template with Claude SDK
+│       ├── template.py     # Template definition
+│       ├── build_dev.py    # Build for development
+│       ├── build_prod.py   # Build for production
+│       ├── Dockerfile      # Container definition
+│       └── e2b.toml        # E2B config
+├── examples/               # Example scripts
+│   ├── run_agent.py        # Simple agent example
+│   ├── run_agent_in_sandbox.py  # Direct sandbox usage
+│   └── server.py           # Optional FastAPI wrapper
+├── scripts/                # Utilities
+│   └── test_sandbox.py     # Test sandbox is working
+├── run_agent.py            # Main entry point
+└── onboarding.sh           # Setup script
 ```
+
+## Setup
+
+1. **Python 3.12+** required
+
+2. **Run onboarding:**
+   ```bash
+   ./onboarding.sh
+   ```
+
+3. **Configure `.env`:**
+   ```
+   CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat...  # From: claude setup-token
+   E2B_API_KEY=e2b_...                    # From: https://e2b.dev/dashboard
+   E2B_TEMPLATE_ID=...                    # From: npm run build:template
+   ```
+
+4. **Build the template (first time only):**
+   ```bash
+   npm run build:template
+   ```
+
+## Usage
+
+### Run an Agent
+
+```bash
+python run_agent.py "Your prompt here"
+python run_agent.py -p "Your prompt" -t 120 -v
+```
+
+### Test the Sandbox
+
+```bash
+python scripts/test_sandbox.py
+```
+
+### Optional: FastAPI Server
+
+```bash
+cd examples
+python server.py
+# Then: curl -X POST http://localhost:8000/agent/run -d '{"prompt": "..."}'
+```
+
+## How It Works
+
+1. The sandbox template (`agents/base/`) pre-installs Claude Agent SDK
+2. `run_agent.py` spins up a sandbox and runs your prompt inside it
+3. The agent has access to file tools (Read, Write, Glob, Grep, Bash)
+4. Results are streamed back
+
+## Authentication
+
+### Claude Max (OAuth Token)
+
+```bash
+# Get your token
+claude setup-token
+
+# Add to .env
+CLAUDE_CODE_OAUTH_TOKEN=your-oauth-token
+```
+
+### E2B API Key
+
+Get your E2B API key from [e2b.dev/dashboard](https://e2b.dev/dashboard):
+
+```bash
+E2B_API_KEY=your-e2b-key
+```
+
+## Resources
+
+- [Claude Agent SDK Documentation](https://platform.claude.com/docs/en/agent-sdk/overview)
+- [E2B Documentation](https://e2b.dev/docs)
+- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code)
 
 ## License
 

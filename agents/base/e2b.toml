@@ -1,0 +1,6 @@
+# E2B Template Configuration
+dockerfile = "Dockerfile"
+template_name = "claude-agent-sandbox"
+cpu_count = 2
+memory_mb = 4096
+start_cmd = "/bin/bash"
