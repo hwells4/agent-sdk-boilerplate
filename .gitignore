@@ -17,6 +17,11 @@ venv/
 # Node
 node_modules/
 
+# TypeScript
+dist/
+*.tsbuildinfo
+*.d.ts.map
+
 # IDE
 .vscode/
 .idea/

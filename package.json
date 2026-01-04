@@ -4,13 +4,11 @@
   "description": "Claude Agent SDK running in E2B sandboxes",
   "scripts": {
     "setup": "./setup.sh",
-    "agent": "source .venv/bin/activate && python run_agent.py",
-    "validate": "source .venv/bin/activate && python scripts/validate_setup.py",
     "build:template": "cd agents/base && source ../../.venv/bin/activate && python build_dev.py",
-    "ts:example": "tsx examples/basic_typescript.ts",
-    "ts:streaming": "tsx examples/streaming_example.ts",
-    "ts:console-streaming": "tsx examples/console_streaming_example.ts",
-    "ts:sse-api": "tsx examples/sse-streaming-api.ts"
+    "example": "tsx examples/basic_typescript.ts",
+    "streaming": "tsx examples/streaming_example.ts",
+    "console-streaming": "tsx examples/console_streaming_example.ts",
+    "sse-api": "tsx examples/sse-streaming-api.ts"
   },
   "author": "",
   "license": "MIT",
