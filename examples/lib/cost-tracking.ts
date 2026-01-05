@@ -141,8 +141,13 @@ export function formatCost(cost: CostBreakdown): string {
 /**
  * Parse token usage from Claude Agent SDK output.
  *
- * The SDK outputs usage information in JSON format, typically at the end
- * of the stdout stream.
+ * NOTE: As of the latest implementation (2025-01), this function is primarily
+ * used as a fallback. The Python agent now outputs structured JSON with usage
+ * information, which is parsed directly in agent.ts.
+ *
+ * IMPORTANT: Token usage is available with both OAuth tokens and API keys.
+ * The Claude Agent SDK tracks token usage internally regardless of auth method.
+ * If you're seeing zeros, it's likely a parsing issue, not an OAuth limitation.
  *
  * @param stdout - Standard output from Python agent
  * @returns Parsed token usage or zeros if not found

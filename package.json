@@ -8,7 +8,9 @@
     "example": "tsx examples/basic_typescript.ts",
     "streaming": "tsx examples/streaming_example.ts",
     "console-streaming": "tsx examples/console_streaming_example.ts",
-    "sse-api": "tsx examples/sse-streaming-api.ts"
+    "sse-api": "tsx examples/sse-streaming-api.ts",
+    "multi-turn": "tsx examples/multi_turn_conversation.ts",
+    "test:observability": "tsx examples/test_streaming_observability.ts"
   },
   "author": "",
   "license": "MIT",
