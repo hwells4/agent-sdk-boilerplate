@@ -385,9 +385,9 @@ async def main():
                 # Extract usage metrics if available
                 if hasattr(msg, 'usage') and msg.usage:
                     usage_data = {
-                        "input_tokens": int(getattr(msg.usage, 'input_tokens', 0)),
-                        "output_tokens": int(getattr(msg.usage, 'output_tokens', 0)),
-                        "cache_read_input_tokens": int(getattr(msg.usage, 'cache_read_input_tokens', 0))
+                        "input_tokens": int(msg.usage.get('input_tokens', 0)),
+                        "output_tokens": int(msg.usage.get('output_tokens', 0)),
+                        "cache_read_input_tokens": int(msg.usage.get('cache_read_input_tokens', 0))
                     }
 
     # Output result and usage as JSON to stdout for TypeScript parsing
@@ -562,9 +562,9 @@ async def main():
                 usage_info = {}
                 if hasattr(msg, 'usage') and msg.usage:
                     usage_info = {
-                        "input_tokens": int(getattr(msg.usage, 'input_tokens', 0)),
-                        "output_tokens": int(getattr(msg.usage, 'output_tokens', 0)),
-                        "cache_read_input_tokens": int(getattr(msg.usage, 'cache_read_input_tokens', 0))
+                        "input_tokens": int(msg.usage.get('input_tokens', 0)),
+                        "output_tokens": int(msg.usage.get('output_tokens', 0)),
+                        "cache_read_input_tokens": int(msg.usage.get('cache_read_input_tokens', 0))
                     }
 
                 emit("result", {
