@@ -337,6 +337,52 @@ runPythonAgentStreaming({
 })
 ```
 
+#### Decision 8: Trace Sampling (Phase 3)
+
+**Chosen approach**: Deterministic hash-based sampling with always-trace-errors policy
+
+**Rationale**:
+- **Deterministic sampling** (hash-based): Same inputs always sample the same way, enabling reproducible debugging
+- **Always trace errors**: Failed executions always traced regardless of sample rate (critical for debugging)
+- **Default 1.0 (100%)**: Users opt-in to sampling when needed, avoiding confusion
+- **Per-call override**: Flexibility to always trace critical operations
+
+**Configuration**:
+```typescript
+// Global default via environment variable
+BRAINTRUST_SAMPLE_RATE=0.1  // Sample 10% of traces
+
+// Per-call override
+await runPythonAgent({
+  prompt: 'Your task',
+  observability: {
+    sample: 1.0  // Always trace this specific call
+  }
+})
+```
+
+**Sampling algorithm**:
+```typescript
+function shouldSample(prompt: string, sampleRate: number): boolean {
+  if (sampleRate >= 1.0) return true
+  if (sampleRate <= 0.0) return false
+
+  // Deterministic hash of prompt
+  const hash = hashString(prompt)
+  return (hash % 100) < (sampleRate * 100)
+}
+
+// Always trace errors regardless of sample rate
+if (executionFailed) {
+  traceExecution() // Override sampling
+}
+```
+
+**User experience**:
+- When sampled out: `[Observability] Trace sampled out (rate: 10%)`
+- When traced: Normal observability logging
+- Clear documentation on sampling behavior
+
 ---
 
 ## Implementation Phases
@@ -1996,20 +2042,63 @@ await traceAgentExecution(
 
 ### Trace Sampling
 
-Sample traces in production:
+**Implementation approach**: Deterministic hash-based sampling with always-trace-errors policy
 
 ```typescript
 // In observability.ts
-export function shouldSampleTrace(): boolean {
-  const sampleRate = parseFloat(process.env.BRAINTRUST_SAMPLE_RATE || '1.0')
-  return Math.random() < sampleRate
+function hashString(str: string): number {
+  let hash = 0
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i)
+    hash = ((hash << 5) - hash) + char
+    hash = hash & hash // Convert to 32-bit integer
+  }
+  return Math.abs(hash)
 }
 
-// Usage
-if (shouldSampleTrace()) {
-  // Enable tracing for this execution
+export function shouldSampleTrace(prompt: string, sampleRate?: number): boolean {
+  const rate = sampleRate ?? parseFloat(process.env.BRAINTRUST_SAMPLE_RATE || '1.0')
+
+  // Always trace if rate >= 100%
+  if (rate >= 1.0) return true
+
+  // Never trace if rate <= 0%
+  if (rate <= 0.0) return false
+
+  // Deterministic hash-based sampling
+  const hash = hashString(prompt)
+  return (hash % 100) < (rate * 100)
+}
+
+// Usage in agent functions
+const sampleRate = config.observability?.sample
+const shouldTrace = shouldSampleTrace(prompt, sampleRate)
+
+if (shouldTrace || executionFailed) {
+  // Enable tracing (always trace errors regardless of sample rate)
+  traceAgentExecution(...)
 }
 ```
+
+**Configuration options**:
+```bash
+# Global default (environment variable)
+BRAINTRUST_SAMPLE_RATE=0.1  # Sample 10% of traces
+
+# Per-call override (function parameter)
+await runPythonAgent({
+  prompt: 'Your task',
+  observability: {
+    sample: 1.0  // Always trace this call
+  }
+})
+```
+
+**Key features**:
+- Deterministic: Same prompt always samples the same way
+- Always traces errors regardless of sample rate
+- Per-call override capability
+- Clear logging when traces are sampled out
 
 ### Evaluation Framework
 
