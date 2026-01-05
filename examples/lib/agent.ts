@@ -9,7 +9,7 @@
 
 import { Sandbox } from '@e2b/code-interpreter'
 import { createConsoleStreamHandler, createLineBufferedHandler, StreamCallbacks, StreamEvent, parseStreamEvent } from './streaming'
-import { traceAgentExecution, exportTraceContext } from './observability'
+import { traceAgentExecution, exportTraceContext, shouldSampleTrace } from './observability'
 import { calculateCost, formatCost, parseTokenUsage } from './cost-tracking'
 import { createAgentError, formatAgentError, categorizeError } from './error-tracking'
 
@@ -17,12 +17,16 @@ export interface AgentConfig {
   prompt: string
   timeout?: number
   verbose?: boolean
+  observability?: {
+    sample?: number  // Sample rate (0.0-1.0), overrides BRAINTRUST_SAMPLE_RATE env var
+  }
 }
 
 export interface StreamingAgentConfig extends AgentConfig {
   onStream?: StreamCallbacks
   observability?: {
     mode?: 'batch' | 'realtime'  // Default: 'batch'
+    sample?: number  // Sample rate (0.0-1.0), overrides BRAINTRUST_SAMPLE_RATE env var
   }
 }
 
@@ -47,6 +51,15 @@ export interface AgentResult {
 export async function runPythonAgent(config: AgentConfig): Promise<string> {
   const { prompt, timeout = 120, verbose = false } = config
 
+  // Check sampling (deterministic hash-based)
+  const shouldTrace = shouldSampleTrace(prompt, config.observability?.sample)
+
+  // Log when traces are sampled out
+  if (!shouldTrace && verbose && process.env.BRAINTRUST_API_KEY) {
+    const rate = config.observability?.sample ?? parseFloat(process.env.BRAINTRUST_SAMPLE_RATE || '1.0')
+    console.log(`[Observability] Trace sampled out (rate: ${(rate * 100).toFixed(0)}%)`)
+  }
+
   return traceAgentExecution('run_agent', { prompt: prompt.substring(0, 100) }, async (span) => {
     const startTime = Date.now()
     const templateId = process.env.E2B_TEMPLATE_ID
@@ -65,8 +78,8 @@ export async function runPythonAgent(config: AgentConfig): Promise<string> {
       console.log(`Starting sandbox (template: ${templateId})...`)
     }
 
-    // Export trace context for sandbox
-    const traceContext = await exportTraceContext(span)
+    // Export trace context for sandbox (only if we're sampling)
+    const traceContext = shouldTrace ? await exportTraceContext(span) : null
 
     // Create sandbox from Python-based template
     let sandbox: Sandbox
@@ -185,8 +198,8 @@ asyncio.run(main())
         CLAUDE_CODE_OAUTH_TOKEN: oauthToken,
       }
 
-      // Inject Braintrust context if available
-      if (process.env.BRAINTRUST_API_KEY) {
+      // Inject Braintrust context if available and we're sampling
+      if (process.env.BRAINTRUST_API_KEY && shouldTrace) {
         envs.BRAINTRUST_API_KEY = process.env.BRAINTRUST_API_KEY
         envs.BRAINTRUST_PROJECT_NAME = process.env.BRAINTRUST_PROJECT_NAME || 'claude-agent-sdk'
 
@@ -222,13 +235,16 @@ asyncio.run(main())
           }
         )
 
-        // Log error to Braintrust span
+        // Log error to Braintrust span (always log errors, even if sampled out)
         if (span) {
           span.log({
             error: agentError,
             metrics: {
               exitCode: Number(execution.exitCode),
               executionTime: Number(endTime - startTime),
+            },
+            metadata: {
+              sampledOut: !shouldTrace,  // Indicate this was sampled out but logged due to error
             }
           })
         }
@@ -265,8 +281,8 @@ asyncio.run(main())
         }
       )
 
-      // Log to Braintrust
-      if (span) {
+      // Log to Braintrust (only if we're sampling)
+      if (span && shouldTrace) {
         span.log({
           output: result,
           metrics: {
@@ -314,6 +330,15 @@ asyncio.run(main())
 export async function runPythonAgentDetailed(config: AgentConfig): Promise<AgentResult> {
   const { prompt, timeout = 120, verbose = false } = config
 
+  // Check sampling (deterministic hash-based)
+  const shouldTrace = shouldSampleTrace(prompt, config.observability?.sample)
+
+  // Log when traces are sampled out
+  if (!shouldTrace && verbose && process.env.BRAINTRUST_API_KEY) {
+    const rate = config.observability?.sample ?? parseFloat(process.env.BRAINTRUST_SAMPLE_RATE || '1.0')
+    console.log(`[Observability] Trace sampled out (rate: ${(rate * 100).toFixed(0)}%)`)
+  }
+
   return traceAgentExecution('run_agent_detailed', { prompt: prompt.substring(0, 100) }, async (span) => {
     const startTime = Date.now()
     const templateId = process.env.E2B_TEMPLATE_ID
@@ -326,8 +351,8 @@ export async function runPythonAgentDetailed(config: AgentConfig): Promise<Agent
       throw new Error('CLAUDE_CODE_OAUTH_TOKEN not set')
     }
 
-    // Export trace context for sandbox
-    const traceContext = await exportTraceContext(span)
+    // Export trace context for sandbox (only if we're sampling)
+    const traceContext = shouldTrace ? await exportTraceContext(span) : null
 
     const sandbox = await Sandbox.create(templateId, {
       timeoutMs: timeout * 1000,
@@ -407,7 +432,8 @@ asyncio.run(main())
         CLAUDE_CODE_OAUTH_TOKEN: oauthToken,
       }
 
-      if (process.env.BRAINTRUST_API_KEY) {
+      // Inject Braintrust context if available and we're sampling
+      if (process.env.BRAINTRUST_API_KEY && shouldTrace) {
         envs.BRAINTRUST_API_KEY = process.env.BRAINTRUST_API_KEY
         envs.BRAINTRUST_PROJECT_NAME = process.env.BRAINTRUST_PROJECT_NAME || 'claude-agent-sdk'
         if (traceContext) {
@@ -425,12 +451,16 @@ asyncio.run(main())
 
       const endTime = Date.now()
 
-      // Log to Braintrust
-      if (span) {
+      // Log to Braintrust (always log errors, only log success if sampling)
+      const isError = execution.exitCode !== 0
+      if (span && (shouldTrace || isError)) {
         span.log({
           metrics: {
             exitCode: Number(execution.exitCode),
             durationMs: Number(endTime - startTime),
+          },
+          metadata: {
+            sampledOut: !shouldTrace && isError,  // Indicate if this was sampled out but logged due to error
           }
         })
       }
@@ -476,6 +506,15 @@ export async function runPythonAgentStreaming(
 ): Promise<string> {
   const { prompt, timeout = 120, verbose = false, onStream, observability } = config
 
+  // Check sampling (deterministic hash-based)
+  const shouldTrace = shouldSampleTrace(prompt, observability?.sample)
+
+  // Log when traces are sampled out
+  if (!shouldTrace && verbose && process.env.BRAINTRUST_API_KEY) {
+    const rate = observability?.sample ?? parseFloat(process.env.BRAINTRUST_SAMPLE_RATE || '1.0')
+    console.log(`[Observability] Trace sampled out (rate: ${(rate * 100).toFixed(0)}%)`)
+  }
+
   return traceAgentExecution('run_agent_streaming', { prompt: prompt.substring(0, 100) }, async (span) => {
     const startTime = Date.now()
     const templateId = process.env.E2B_TEMPLATE_ID
@@ -492,8 +531,8 @@ export async function runPythonAgentStreaming(
       console.log(`Starting sandbox (template: ${templateId})...`)
     }
 
-    // Export trace context for sandbox
-    const traceContext = await exportTraceContext(span)
+    // Export trace context for sandbox (only if we're sampling)
+    const traceContext = shouldTrace ? await exportTraceContext(span) : null
 
     const sandbox = await Sandbox.create(templateId, {
       timeoutMs: timeout * 1000,
@@ -597,7 +636,7 @@ if __name__ == "__main__":
 
       // Helper function to log event to Braintrust span
       const logEventToSpan = (event: StreamEvent) => {
-        if (!span) return
+        if (!span || !shouldTrace) return
 
         switch (event.type) {
           case 'tool_use':
@@ -675,8 +714,8 @@ if __name__ == "__main__":
         CLAUDE_CODE_OAUTH_TOKEN: oauthToken,
       }
 
-      // Inject Braintrust context if available
-      if (process.env.BRAINTRUST_API_KEY) {
+      // Inject Braintrust context if available and we're sampling
+      if (process.env.BRAINTRUST_API_KEY && shouldTrace) {
         envs.BRAINTRUST_API_KEY = process.env.BRAINTRUST_API_KEY
         envs.BRAINTRUST_PROJECT_NAME = process.env.BRAINTRUST_PROJECT_NAME || 'claude-agent-sdk'
         if (traceContext) {
@@ -720,8 +759,8 @@ if __name__ == "__main__":
         }
       )
 
-      // Batch upload events to Braintrust (if not in real-time mode)
-      if (span && !realtimeMode) {
+      // Batch upload events to Braintrust (if not in real-time mode and we're sampling)
+      if (span && !realtimeMode && shouldTrace) {
         for (const event of events) {
           switch (event.type) {
             case 'tool_use':
@@ -754,8 +793,8 @@ if __name__ == "__main__":
         }
       }
 
-      // Log final metrics
-      if (span) {
+      // Log final metrics (only if we're sampling)
+      if (span && shouldTrace) {
         span.log({
           output: finalResult,
           metrics: {
