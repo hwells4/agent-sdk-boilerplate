@@ -293,27 +293,61 @@ We've been validating all Phase 1 and Phase 2 features through three main test s
    - Modified files: `basic_typescript.ts`, `agent.ts`, `test_streaming_observability.ts`
    - Commit message documents all fixes
 
-### Phase 3: Production Hardening (PENDING)
-**Estimated Effort:** 1-2 days
+### Phase 3: Production Hardening (IN PROGRESS)
+**Completion Date:** 2026-01-04 (Trace Sampling)
 
-**Features to Implement:**
-1. **Retry Logic for Failed Trace Uploads**
+**Features Implemented:**
+
+#### 1. Trace Sampling Configuration ✅ COMPLETE
+**Completion Date:** 2026-01-04
+
+- ✅ Deterministic hash-based sampling (same prompt always samples the same way)
+- ✅ Environment variable configuration (`BRAINTRUST_SAMPLE_RATE`)
+- ✅ Per-call override via `observability.sample` parameter
+- ✅ Always-trace-errors policy (failures always traced regardless of sample rate)
+- ✅ Clear logging when traces are sampled out
+- ✅ Default 1.0 (100%) - users opt-in to sampling
+
+**Configuration:**
+```typescript
+// Global default
+BRAINTRUST_SAMPLE_RATE=0.1  // Sample 10% of traces
+
+// Per-call override
+await runPythonAgent({
+  prompt: 'Your task',
+  observability: { sample: 1.0 }  // Always trace this call
+})
+```
+
+**Test Results:**
+```bash
+✅ 0% sampling: Correctly sampled out, no traces sent
+✅ 50% sampling: Deterministic hashing working
+✅ 100% sampling: Default behavior, all traces sent
+✅ Per-call override: Successfully overrides global rate
+✅ Error handling: Errors always traced
+```
+
+**Files Modified:**
+- `examples/lib/observability.ts` - Added `shouldSampleTrace()` function
+- `examples/lib/agent.ts` - Updated all 3 agent functions with sampling logic
+- `examples/test_sampling.ts` - Comprehensive sampling tests (created)
+
+**Features Pending:**
+
+#### 2. Retry Logic for Failed Trace Uploads (PENDING)
    - Max 3 retry attempts with exponential backoff
    - Queue failed traces for later upload
    - Warning messages if observability fails
 
-2. **Trace Sampling Configuration**
-   - Sample percentage (e.g., trace only 10% of executions)
-   - Configurable via environment variable
-   - Useful for high-volume production
-
-3. **Comprehensive Documentation**
+#### 3. Comprehensive Documentation (PENDING)
    - API reference for all observability functions
    - Troubleshooting guide
    - Best practices for production
    - Update README and CLAUDE.md
 
-**Note:** Phase 3 is **optional for now**. All core functionality works without it.
+**Note:** Retry logic and documentation are **optional**. Core sampling functionality is production-ready.
 
 ---
 
