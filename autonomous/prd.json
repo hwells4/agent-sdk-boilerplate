@@ -112,7 +112,7 @@
         "npx tsc --noEmit passes"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "notes": "findIdle is critical for the cron cleanup job"
     },
     {

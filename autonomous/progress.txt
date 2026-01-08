@@ -106,3 +106,19 @@
 - Files changed: convex/lib/stateMachine.ts (new), convex/sandboxRuns.ts (new)
 - Convex folder typechecks cleanly via `cd convex && npx tsc --noEmit`
 ---
+
+## 2026-01-08 - US-007
+- Added sandboxRun queries to convex/sandboxRuns.ts
+- Queries:
+  - get: takes sandboxRunId, returns run document or null
+  - listByWorkspace: takes workspaceId, returns runs using by_workspace index
+  - listByThread: takes threadId, returns runs using by_thread index
+  - findIdle: takes maxIdleMs, returns idle running sandboxes for cleanup
+- findIdle implementation:
+  - Queries sandboxRuns by status 'running' using by_status index
+  - Filters out runs without sandboxId (sandbox not yet created)
+  - Compares lastActivityAt against cutoff (now - maxIdleMs)
+  - Critical for cron cleanup job in US-009
+- Files changed: convex/sandboxRuns.ts
+- Convex folder typechecks cleanly via `cd convex && npx tsc --noEmit`
+---
