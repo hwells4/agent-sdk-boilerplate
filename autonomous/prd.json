@@ -27,7 +27,7 @@
         "npx tsc --noEmit passes"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Installs the agent component with threads, messages, streaming"
     },
     {

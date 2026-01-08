@@ -7,6 +7,7 @@
 - Pre-existing TypeScript errors exist in examples/ folder - not blocking Convex work
 
 ## Key Files
+- convex/convex.config.ts - Convex app configuration with @convex-dev/agent component
 - convex/schema.ts - Convex database schema definition
 - convex/_generated/ - Auto-generated type definitions (can be stubbed for local dev)
 - convex/tsconfig.json - TypeScript config for Convex functions
@@ -22,4 +23,15 @@
 - Files changed: package.json, package-lock.json, convex/* (new)
 - Gotcha: `npx convex init` is deprecated - manual setup or `convex dev --once` required
 - Gotcha: _generated folder requires live deployment to auto-generate; stub files work for local typecheck
+---
+
+## 2026-01-08 - US-002
+- Created convex/convex.config.ts to configure @convex-dev/agent component
+- Imports defineApp from convex/server
+- Imports agent from @convex-dev/agent/convex.config
+- Calls app.use(agent) to install agent component with threads, messages, streaming
+- Exports default app configuration
+- Updated _generated files with components export for agent integration
+- Files changed: convex/convex.config.ts (new), convex/_generated/* (updated)
+- Convex folder typechecks cleanly; pre-existing examples/ errors remain (documented as non-blocking)
 ---
