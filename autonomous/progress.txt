@@ -11,6 +11,8 @@
 - convex/schema.ts - Convex database schema definition
 - convex/_generated/ - Auto-generated type definitions (can be stubbed for local dev)
 - convex/tsconfig.json - TypeScript config for Convex functions
+- convex/lib/stateMachine.ts - State machine for sandbox run status transitions
+- convex/sandboxRuns.ts - CRUD mutations for sandbox runs with state validation
 - autonomous/prd.json - Story tracking for autonomous agent
 
 ---
@@ -80,5 +82,27 @@
 - Helper functions: getUserMembership, canManageMembers
 - All functions use ctx.auth.getUserIdentity() for authentication
 - Files changed: convex/workspaceMembers.ts (new)
+- Convex folder typechecks cleanly via `cd convex && npx tsc --noEmit`
+---
+
+## 2026-01-08 - US-006
+- Created convex/lib/stateMachine.ts for sandbox run status transitions
+  - VALID_TRANSITIONS constant mapping current status to allowed next statuses
+  - booting -> running, failed, canceled
+  - running -> succeeded, failed, canceled
+  - succeeded, failed, canceled are terminal states (no transitions)
+  - validateTransition(from, to) returns boolean for validity check
+  - isTerminalStatus and getTransitionError helper functions
+  - SandboxStatus type definition for type safety
+- Created convex/sandboxRuns.ts with mutations
+  - create: takes threadId, workspaceId, status, returns sandboxRunId
+    - Validates user authentication and workspace membership
+    - Sets startedAt and lastActivityAt to current time
+    - Optional maxDurationMs and idleTimeoutMs parameters
+  - update: takes sandboxRunId and partial fields
+    - Validates status transitions using state machine
+    - Throws descriptive error on invalid transition
+    - Supports: sandboxId, status, finishedAt, lastActivityAt, e2bCost, error
+- Files changed: convex/lib/stateMachine.ts (new), convex/sandboxRuns.ts (new)
 - Convex folder typechecks cleanly via `cd convex && npx tsc --noEmit`
 ---

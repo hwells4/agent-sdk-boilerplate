@@ -96,7 +96,7 @@
         "npx tsc --noEmit passes"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "notes": "State machine prevents invalid sandbox state transitions"
     },
     {
