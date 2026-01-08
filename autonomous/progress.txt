@@ -35,3 +35,19 @@
 - Files changed: convex/convex.config.ts (new), convex/_generated/* (updated)
 - Convex folder typechecks cleanly; pre-existing examples/ errors remain (documented as non-blocking)
 ---
+
+## 2026-01-08 - US-003
+- Created complete Convex schema with 4 custom tables
+- workspaces: name, ownerId, createdAt (multi-tenant container)
+- workspaceMembers: workspaceId, userId, role, joinedAt with indexes (by_user, by_workspace)
+- sandboxRuns: Full E2B tracking with state machine (booting/running/succeeded/failed/canceled)
+  - Fields: threadId, workspaceId, createdBy, sandboxId, status, startedAt, finishedAt, lastActivityAt, maxDurationMs, idleTimeoutMs, e2bCost, error
+  - Indexes: by_thread, by_workspace, by_status
+- artifacts: HITL artifact review workflow
+  - Fields: sandboxRunId, threadId, type, title, storageId, contentType, size, sandboxPath, previewText, reviewState, reviewedBy, reviewedAt, createdAt
+  - Type: file/image/code/log/other
+  - ReviewState: pending/approved/rejected
+  - Indexes: by_run, by_thread, by_review_state
+- Files changed: convex/schema.ts
+- Convex folder typechecks cleanly via `cd convex && npx tsc --noEmit`
+---

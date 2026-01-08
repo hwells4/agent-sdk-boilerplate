@@ -45,7 +45,7 @@
         "npx tsc --noEmit passes"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Core data model for multi-tenancy and E2B orchestration"
     },
     {
