@@ -13,6 +13,7 @@
 - convex/tsconfig.json - TypeScript config for Convex functions
 - convex/lib/stateMachine.ts - State machine for sandbox run status transitions
 - convex/sandboxRuns.ts - CRUD mutations for sandbox runs with state validation
+- convex/artifacts.ts - CRUD mutations for artifacts with HITL review workflow
 - convex/actions/startSandboxRun.ts - E2B sandbox creation action with 'use node' directive
 - convex/actions/killIdleSandboxes.ts - Cron action to kill idle E2B sandboxes
 - convex/crons.ts - Cron job definitions (killIdleSandboxes runs every 30s)
@@ -167,5 +168,25 @@
   - Expanded internal object with actions.killIdleSandboxes namespace
 - Pattern: Cron jobs invoke internal actions which use internal queries/mutations
 - Files changed: convex/actions/killIdleSandboxes.ts (new), convex/crons.ts (new), convex/sandboxRuns.ts, convex/_generated/api.d.ts
+- Convex folder typechecks cleanly via `cd convex && npx tsc --noEmit`
+---
+
+## 2026-01-08 - US-010
+- Created convex/artifacts.ts with full CRUD operations for artifacts table
+- Mutations:
+  - create: Creates artifact with sandboxRunId, threadId, type, title, storageId,
+    contentType, size, optional sandboxPath and previewText
+    - Sets reviewState to 'pending' by default
+    - Validates user auth and sandbox run exists
+  - updateReviewState: Updates reviewState (pending/approved/rejected)
+    - Sets reviewedBy and reviewedAt automatically
+    - Supports HITL (human-in-the-loop) review workflow
+- Queries:
+  - get: Returns artifact by ID or null
+  - listByRun: Returns all artifacts for a sandboxRunId using by_run index
+  - listPending: Returns artifacts with reviewState 'pending' using by_review_state index
+- Follows existing patterns from sandboxRuns.ts for consistency
+- All functions use ctx.auth.getUserIdentity() for authentication
+- Files changed: convex/artifacts.ts (new)
 - Convex folder typechecks cleanly via `cd convex && npx tsc --noEmit`
 ---

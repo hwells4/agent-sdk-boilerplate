@@ -164,7 +164,7 @@
         "npx tsc --noEmit passes"
       ],
       "priority": 10,
-      "passes": false,
+      "passes": true,
       "notes": "Artifact review workflow for HITL"
     },
     {
