@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query, internalMutation } from "./_generated/server";
+import { mutation, query, internalMutation, internalQuery } from "./_generated/server";
 import { Id, Doc } from "./_generated/dataModel";
 import {
   SandboxStatus,
@@ -378,5 +378,41 @@ export const internalUpdate = internalMutation({
     }
 
     await ctx.db.patch(args.sandboxRunId, updates);
+  },
+});
+
+/**
+ * Internal query to find idle running sandboxes (for use by cron job)
+ * Returns sandboxes where:
+ * - status is 'running'
+ * - sandboxId exists (sandbox was actually created)
+ * - (now - lastActivityAt) > maxIdleMs
+ *
+ * @param maxIdleMs - Maximum idle time in milliseconds
+ * @returns Array of idle sandbox runs
+ */
+export const internalFindIdle = internalQuery({
+  args: {
+    maxIdleMs: v.number(),
+  },
+  handler: async (ctx, args): Promise<Doc<"sandboxRuns">[]> => {
+    const now = Date.now();
+    const cutoffTime = now - args.maxIdleMs;
+
+    // Get all running sandboxes
+    const runningSandboxes = await ctx.db
+      .query("sandboxRuns")
+      .withIndex("by_status", (q) => q.eq("status", "running"))
+      .collect();
+
+    // Filter to idle sandboxes with a valid sandboxId
+    return runningSandboxes.filter((run) => {
+      // Must have a sandboxId (sandbox was actually created)
+      if (run.sandboxId === undefined) {
+        return false;
+      }
+      // Must be idle longer than maxIdleMs
+      return run.lastActivityAt < cutoffTime;
+    });
   },
 });
