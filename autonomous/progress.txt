@@ -51,3 +51,18 @@
 - Files changed: convex/schema.ts
 - Convex folder typechecks cleanly via `cd convex && npx tsc --noEmit`
 ---
+
+## 2026-01-08 - US-004
+- Created convex/workspaces.ts with full CRUD operations for workspaces table
+- Mutations:
+  - create: takes name, returns workspace Id, also creates owner membership entry
+  - update: takes workspaceId and name, validates owner-only access
+  - remove: takes workspaceId, deletes all members first, then workspace
+- Queries:
+  - get: takes workspaceId, returns workspace or null (validates access)
+  - list: returns all workspaces for current user (owned + member)
+- All functions use ctx.auth.getUserIdentity() for authentication
+- Owner-only validation for update/remove mutations
+- Files changed: convex/workspaces.ts (new)
+- Convex folder typechecks cleanly via `cd convex && npx tsc --noEmit`
+---

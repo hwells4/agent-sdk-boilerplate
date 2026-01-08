@@ -62,7 +62,7 @@
         "npx tsc --noEmit passes"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": "CRUD for workspaces table"
     },
     {
