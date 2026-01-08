@@ -21,9 +21,7 @@ Or manually:
 
 ```bash
 cd agents/base
-source ../../.venv/bin/activate
-export E2B_API_KEY=your-key
-python build_dev.py
+./scripts/build_dev.sh  # creates agents/base/.venv on first run
 ```
 
 The build outputs a template ID. Add it to your `.env`:
@@ -54,4 +52,4 @@ template = (
 )
 ```
 
-Then rebuild with `python build_dev.py`.
+Then rebuild with `./scripts/build_dev.sh`.
