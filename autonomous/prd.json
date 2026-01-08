@@ -1,0 +1,38 @@
+{
+  "branchName": "autonomous/example-feature",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Add email validation utility",
+      "acceptanceCriteria": [
+        "Function validates email format",
+        "Test: rejects 'invalid'",
+        "Test: rejects 'missing@'",
+        "Test: accepts 'user@domain.com'",
+        "npm test passes",
+        "typecheck passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Add login form",
+      "acceptanceCriteria": [
+        "Email and password input fields",
+        "Submit button calls login action",
+        "Shows error message on invalid input",
+        "Test: renders email input",
+        "Test: renders password input",
+        "Test: shows error when email invalid",
+        "npm test passes",
+        "typecheck passes",
+        "Verify at localhost:3000/login"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

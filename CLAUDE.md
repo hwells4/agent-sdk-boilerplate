@@ -479,8 +479,7 @@ nano template.py
 # .run_cmd("pip install pandas numpy matplotlib")
 
 # Rebuild template
-source ../../.venv/bin/activate
-python build_dev.py
+./scripts/build_dev.sh
 
 # Template ID saved to .env automatically
 ```

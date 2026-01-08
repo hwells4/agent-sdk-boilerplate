@@ -12,8 +12,10 @@ __pycache__/
 *$py.class
 .venv/
 venv/
+**/.venv/
 .pytest_cache/
 .ruff_cache/
+**/.ruff_cache/
 .mypy_cache/
 
 # E2B
@@ -29,6 +31,7 @@ dist/
 
 # IDE
 .vscode/
+!.vscode/settings.json
 .idea/
 
 # OS

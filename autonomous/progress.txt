@@ -1,0 +1,9 @@
+# Progress Log
+
+## Codebase Patterns
+<!-- Add patterns here as you discover them -->
+
+## Key Files
+<!-- Add important files here as you discover them -->
+
+---

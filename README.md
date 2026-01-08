@@ -143,6 +143,72 @@ claude setup-token
 3. Copy your API key
 4. Add it to your `.env` file
 
+### Braintrust Observability (Optional)
+
+The SDK includes **automatic observability** via [Braintrust](https://www.braintrust.dev/) for production monitoring, cost tracking, and debugging.
+
+#### Quick Setup
+
+1. **Get API key** from [braintrust.dev/app/settings/api-keys](https://www.braintrust.dev/app/settings/api-keys)
+2. **Add to `.env`**:
+   ```bash
+   BRAINTRUST_API_KEY=bt_...
+   ```
+3. **Run your agent** - That's it! Traces automatically appear in your dashboard.
+
+#### What Gets Tracked Automatically
+
+Once you set `BRAINTRUST_API_KEY`, the SDK automatically logs:
+
+✅ **Every agent execution** (input, output, duration)
+✅ **Token usage** (prompt, completion, cached tokens)
+✅ **Cost breakdown** (Claude API + E2B sandbox compute)
+✅ **Tool executions** (Bash, Read, Write, Edit, Glob, Grep)
+✅ **Errors** (categorized with full debugging context)
+✅ **Multi-turn conversations** (session-level traces)
+
+#### Configuration Options
+
+```bash
+# .env
+
+# API key (required)
+BRAINTRUST_API_KEY=bt_...
+
+# Project name (optional, defaults to "claude-agent-sdk")
+BRAINTRUST_PROJECT_NAME=my-custom-project
+
+# Sampling rate (optional, defaults to 1.0 = 100%)
+BRAINTRUST_SAMPLE_RATE=0.1  # Sample 10% of traces (production cost optimization)
+```
+
+#### When to Customize Project Names
+
+**Use custom project names for:**
+
+- **Multiple environments**: `my-agent-dev`, `my-agent-prod`, `my-agent-staging`
+- **Multiple projects**: `customer-support-agent`, `code-review-agent`, `data-analysis-agent`
+- **Team separation**: `team-a-agents`, `team-b-agents`
+- **Testing workflows**: `agent-testing`, `agent-experiments`
+
+**Use default (`claude-agent-sdk`) for:**
+
+- Getting started / proof of concept
+- Single project, simple setup
+- Personal experimentation
+
+#### Viewing Your Data
+
+**Web Dashboard**: https://www.braintrust.dev/app
+
+**Interactive Queries (MCP)**: See [Braintrust MCP Integration Guide](docs/BRAINTRUST_MCP_INTEGRATION.md)
+
+#### Complete Documentation
+
+- [Braintrust Integration Guide](docs/BRAINTRUST_INTEGRATION_COMPLETE_GUIDE.md) - Full user guide
+- [Braintrust E2B Architecture](docs/BRAINTRUST_E2B_ARCHITECTURE.md) - Technical deep dive
+- [Braintrust MCP Integration](docs/BRAINTRUST_MCP_INTEGRATION.md) - Query traces from Claude Code
+
 ## Usage
 
 ### Basic Example
@@ -624,7 +690,7 @@ npx tsx examples/sse-streaming-api.ts
 
 # Build custom templates
 cd agents/base
-python build_dev.py
+./scripts/build_dev.sh
 ```
 
 ## API Reference
