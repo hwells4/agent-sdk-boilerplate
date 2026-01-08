@@ -1,38 +1,186 @@
 {
-  "branchName": "autonomous/example-feature",
+  "branchName": "feat/convex-integration",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Add email validation utility",
+      "title": "Initialize Convex and install dependencies",
       "acceptanceCriteria": [
-        "Function validates email format",
-        "Test: rejects 'invalid'",
-        "Test: rejects 'missing@'",
-        "Test: accepts 'user@domain.com'",
-        "npm test passes",
-        "typecheck passes"
+        "Run: npx convex init (creates convex/ directory)",
+        "Run: npm install convex @convex-dev/agent",
+        "convex/ directory exists with _generated/ subfolder",
+        "package.json includes convex and @convex-dev/agent as dependencies",
+        "npx tsc --noEmit passes"
       ],
       "priority": 1,
       "passes": false,
-      "notes": ""
+      "notes": "Foundation - must complete first"
     },
     {
       "id": "US-002",
-      "title": "Add login form",
+      "title": "Configure @convex-dev/agent component",
       "acceptanceCriteria": [
-        "Email and password input fields",
-        "Submit button calls login action",
-        "Shows error message on invalid input",
-        "Test: renders email input",
-        "Test: renders password input",
-        "Test: shows error when email invalid",
-        "npm test passes",
-        "typecheck passes",
-        "Verify at localhost:3000/login"
+        "File exists: convex/convex.config.ts",
+        "File imports defineApp from convex/server",
+        "File imports agent from @convex-dev/agent/convex.config.js",
+        "File calls app.use(agent)",
+        "File exports default app",
+        "npx tsc --noEmit passes"
       ],
       "priority": 2,
       "passes": false,
-      "notes": ""
+      "notes": "Installs the agent component with threads, messages, streaming"
+    },
+    {
+      "id": "US-003",
+      "title": "Create schema with 4 custom tables",
+      "acceptanceCriteria": [
+        "File exists: convex/schema.ts",
+        "Schema defines workspaces table with: name, ownerId, createdAt",
+        "Schema defines workspaceMembers table with: workspaceId, userId, role, joinedAt",
+        "Schema defines sandboxRuns table with: threadId, workspaceId, createdBy, sandboxId, status, startedAt, finishedAt, lastActivityAt, maxDurationMs, idleTimeoutMs, e2bCost, error",
+        "Schema defines artifacts table with: sandboxRunId, threadId, type, title, storageId, contentType, size, sandboxPath, previewText, reviewState, reviewedBy, reviewedAt, createdAt",
+        "workspaceMembers has indexes: by_user, by_workspace",
+        "sandboxRuns has indexes: by_thread, by_workspace, by_status",
+        "artifacts has indexes: by_run, by_thread, by_review_state",
+        "npx tsc --noEmit passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Core data model for multi-tenancy and E2B orchestration"
+    },
+    {
+      "id": "US-004",
+      "title": "Create workspace mutations and queries",
+      "acceptanceCriteria": [
+        "File exists: convex/workspaces.ts",
+        "Mutation create: takes name, returns workspace Id",
+        "Mutation update: takes workspaceId and name",
+        "Mutation remove: takes workspaceId, deletes workspace",
+        "Query get: takes workspaceId, returns workspace or null",
+        "Query list: returns all workspaces for current user",
+        "All functions use ctx.auth for user identification",
+        "npx tsc --noEmit passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "CRUD for workspaces table"
+    },
+    {
+      "id": "US-005",
+      "title": "Create workspaceMember mutations and queries",
+      "acceptanceCriteria": [
+        "File exists: convex/workspaceMembers.ts",
+        "Mutation addMember: takes workspaceId, userId, role",
+        "Mutation removeMember: takes workspaceId, userId",
+        "Mutation updateRole: takes workspaceId, userId, newRole",
+        "Query listMembers: takes workspaceId, returns all members",
+        "Query getUserWorkspaces: returns workspaces current user belongs to",
+        "Role validation: only owner/admin can add/remove members",
+        "npx tsc --noEmit passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "Multi-tenant access control"
+    },
+    {
+      "id": "US-006",
+      "title": "Create state machine and sandboxRun mutations",
+      "acceptanceCriteria": [
+        "File exists: convex/lib/stateMachine.ts",
+        "VALID_TRANSITIONS constant defines: booting->running/failed/canceled, running->succeeded/failed/canceled",
+        "validateTransition function returns boolean",
+        "File exists: convex/sandboxRuns.ts",
+        "Mutation create: takes threadId, workspaceId, status, returns sandboxRunId",
+        "Mutation update: takes sandboxRunId and partial fields, validates status transitions",
+        "Update throws error on invalid status transition",
+        "npx tsc --noEmit passes"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "State machine prevents invalid sandbox state transitions"
+    },
+    {
+      "id": "US-007",
+      "title": "Create sandboxRun queries including findIdle",
+      "acceptanceCriteria": [
+        "Query get: takes sandboxRunId, returns run or null",
+        "Query listByWorkspace: takes workspaceId, returns runs",
+        "Query listByThread: takes threadId, returns runs",
+        "Query findIdle: takes maxIdleMs, returns running sandboxes where (now - lastActivityAt) > maxIdleMs",
+        "findIdle only returns runs with status 'running'",
+        "findIdle filters out runs without sandboxId",
+        "npx tsc --noEmit passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "findIdle is critical for the cron cleanup job"
+    },
+    {
+      "id": "US-008",
+      "title": "Create startSandboxRun action",
+      "acceptanceCriteria": [
+        "File exists: convex/actions/startSandboxRun.ts",
+        "Action marked with 'use node' directive",
+        "Action takes: threadId, workspaceId, prompt, optional maxDurationMs",
+        "Action creates sandboxRun record with status 'booting'",
+        "Action creates E2B sandbox using Sandbox.create()",
+        "Action updates sandboxRun with sandboxId and status 'running'",
+        "On error: updates status to 'failed' with error object",
+        "Uses internal mutations (not public)",
+        "npx tsc --noEmit passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "Core E2B integration - creates and manages sandbox lifecycle"
+    },
+    {
+      "id": "US-009",
+      "title": "Create idle timeout cron job",
+      "acceptanceCriteria": [
+        "File exists: convex/actions/killIdleSandboxes.ts",
+        "Action marked with 'use node' directive",
+        "Action queries findIdle with 15 minute timeout",
+        "Action calls Sandbox.connect() then sandbox.kill() for each idle run",
+        "Action updates each run status to 'canceled' with finishedAt",
+        "Handles errors gracefully (sandbox may already be dead)",
+        "File exists: convex/crons.ts",
+        "Cron schedules killIdleSandboxes every 30 seconds",
+        "npx tsc --noEmit passes"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "Prevents runaway sandbox costs"
+    },
+    {
+      "id": "US-010",
+      "title": "Create artifact mutations and queries",
+      "acceptanceCriteria": [
+        "File exists: convex/artifacts.ts",
+        "Mutation create: takes sandboxRunId, threadId, type, title, storageId, contentType, size, optional sandboxPath, optional previewText",
+        "Mutation updateReviewState: takes artifactId, reviewState, sets reviewedBy and reviewedAt",
+        "Query get: takes artifactId, returns artifact or null",
+        "Query listByRun: takes sandboxRunId, returns artifacts",
+        "Query listPending: returns artifacts with reviewState 'pending'",
+        "npx tsc --noEmit passes"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": "Artifact review workflow for HITL"
+    },
+    {
+      "id": "US-011",
+      "title": "Update project configuration files",
+      "acceptanceCriteria": [
+        ".env.example contains CONVEX_URL variable",
+        ".env.example contains CONVEX_DEPLOY_KEY variable (commented, for production)",
+        "CLAUDE.md documents Convex integration in Architecture section",
+        "CLAUDE.md lists new convex/ files in Project Structure",
+        "CLAUDE.md includes Convex development commands",
+        "npx tsc --noEmit passes"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": "Documentation and configuration updates"
     }
   ]
 }
