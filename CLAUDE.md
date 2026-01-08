@@ -42,34 +42,69 @@ Unlike the Claude API which *suggests* tool calls, this SDK *actually executes* 
 │   - runPythonAgent() SDK function       │
 └──────────────┬──────────────────────────┘
                │
-               │ Creates & manages sandboxes
-               ↓
-┌─────────────────────────────────────────┐
-│   E2B Cloud (Sandbox Provider)         │
-│   - Spins up containers (~150ms)        │
-│   - Manages lifecycle                   │
-│   - Streams stdout/stderr               │
-└──────────────┬──────────────────────────┘
-               │
-               ↓
-┌─────────────────────────────────────────┐
-│   E2B Sandbox (Python Runtime)          │
-│   ┌─────────────────────────────────┐   │
-│   │  Claude Agent SDK (Python)      │   │
-│   │  - Read/Write/Edit tools        │   │
-│   │  - Bash execution               │   │
-│   │  - File search (Glob/Grep)      │   │
-│   │  - Multi-turn reasoning         │   │
-│   └─────────────────────────────────┘   │
-└─────────────────────────────────────────┘
+       ┌───────┴───────┐
+       │               │
+       ↓               ↓
+┌──────────────┐  ┌─────────────────────────┐
+│   Convex     │  │   E2B Cloud             │
+│   Backend    │  │   (Sandbox Provider)    │
+│              │  │                         │
+│  - Threads   │  │   - Spins up containers │
+│  - Messages  │  │   - Manages lifecycle   │
+│  - Agents    │  │   - Streams stdout/err  │
+│  - Workspaces│  └───────────┬─────────────┘
+│  - Artifacts │              │
+└──────────────┘              ↓
+                 ┌─────────────────────────────────────────┐
+                 │   E2B Sandbox (Python Runtime)          │
+                 │   ┌─────────────────────────────────┐   │
+                 │   │  Claude Agent SDK (Python)      │   │
+                 │   │  - Read/Write/Edit tools        │   │
+                 │   │  - Bash execution               │   │
+                 │   │  - File search (Glob/Grep)      │   │
+                 │   │  - Multi-turn reasoning         │   │
+                 │   └─────────────────────────────────┘   │
+                 └─────────────────────────────────────────┘
 ```
 
 **Key Point**: Users only write TypeScript. The Python runtime exists inside E2B sandboxes and is managed automatically by the SDK.
+
+### Convex Backend Integration
+
+The project uses **Convex** as a real-time backend for:
+
+- **@convex-dev/agent**: Pre-built agent infrastructure with threads, messages, and streaming
+- **Multi-tenancy**: Workspaces and workspace members for team collaboration
+- **Sandbox orchestration**: Track E2B sandbox runs with state machine (booting → running → succeeded/failed/canceled)
+- **Artifact management**: Human-in-the-loop review workflow for agent-generated files
+- **Idle cleanup**: Cron job kills sandboxes idle for 15+ minutes to prevent runaway costs
+
+Data flows:
+1. User creates a thread in Convex
+2. `startSandboxRun` action boots an E2B sandbox
+3. Agent executes in sandbox, streams results back
+4. Artifacts saved to Convex storage for review
+5. `killIdleSandboxes` cron cleans up abandoned sandboxes
 
 ## Project Structure
 
 ```
 claude-agent-sdk-experiments/
+├── convex/                       # Convex backend (real-time database + serverless)
+│   ├── _generated/               # Auto-generated types (from schema)
+│   ├── actions/                  # Serverless actions (Node.js runtime)
+│   │   ├── startSandboxRun.ts    # Creates E2B sandbox, updates run status
+│   │   └── killIdleSandboxes.ts  # Cron job to clean up idle sandboxes
+│   ├── lib/                      # Shared utilities
+│   │   └── stateMachine.ts       # Sandbox status transitions
+│   ├── schema.ts                 # Database schema (4 tables)
+│   ├── convex.config.ts          # @convex-dev/agent component config
+│   ├── workspaces.ts             # Workspace CRUD mutations/queries
+│   ├── workspaceMembers.ts       # Member management with role validation
+│   ├── sandboxRuns.ts            # Sandbox run tracking with state machine
+│   ├── artifacts.ts              # Artifact CRUD with HITL review workflow
+│   └── crons.ts                  # Scheduled jobs (idle cleanup every 30s)
+│
 ├── examples/                     # TypeScript SDK and examples
 │   ├── lib/                      # Core SDK (what you import)
 │   │   ├── agent.ts              # Main SDK functions
@@ -199,6 +234,38 @@ npm run build:template
 # 2. Uploads to E2B cloud
 # 3. Saves template ID to .env
 # 4. Template becomes available in ~10-30 seconds
+```
+
+### Convex Development
+
+```bash
+# Start Convex development server (watches for changes, syncs schema)
+npx convex dev
+
+# Deploy to production
+npx convex deploy
+
+# View Convex dashboard (data explorer, logs, functions)
+npx convex dashboard
+
+# Generate types from schema (usually automatic with `convex dev`)
+npx convex codegen
+
+# Run a one-time sync without watching
+npx convex dev --once
+```
+
+**Convex Tables**:
+- `workspaces` - Multi-tenant containers
+- `workspaceMembers` - User roles (owner/admin/member)
+- `sandboxRuns` - E2B sandbox lifecycle tracking
+- `artifacts` - Agent-generated files with review workflow
+
+**State Machine** (`convex/lib/stateMachine.ts`):
+```
+booting → running → succeeded
+                 → failed
+                 → canceled
 ```
 
 ## SDK Functions Reference
