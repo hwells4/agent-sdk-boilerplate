@@ -190,3 +190,21 @@
 - Files changed: convex/artifacts.ts (new)
 - Convex folder typechecks cleanly via `cd convex && npx tsc --noEmit`
 ---
+
+## 2026-01-08 - US-011
+- Updated project configuration files for Convex integration
+- .env.example changes:
+  - Added CONVEX_URL variable with dashboard instructions
+  - Added CONVEX_DEPLOY_KEY variable (commented) for CI/CD pipelines
+- CLAUDE.md Architecture section:
+  - Updated diagram to show Convex backend alongside E2B Cloud
+  - Added "Convex Backend Integration" section explaining data flows
+- CLAUDE.md Project Structure:
+  - Added complete convex/ directory with all files documented
+  - Includes _generated/, actions/, lib/, and root-level files
+- CLAUDE.md Common Development Tasks:
+  - Added "Convex Development" section with npx convex commands
+  - Documents tables and state machine overview
+- Files changed: .env.example, CLAUDE.md
+- Convex folder typechecks cleanly via `cd convex && npx tsc --noEmit`
+---
