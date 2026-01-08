@@ -130,7 +130,7 @@
         "npx tsc --noEmit passes"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "notes": "Core E2B integration - creates and manages sandbox lifecycle"
     },
     {

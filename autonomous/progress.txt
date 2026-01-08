@@ -13,6 +13,7 @@
 - convex/tsconfig.json - TypeScript config for Convex functions
 - convex/lib/stateMachine.ts - State machine for sandbox run status transitions
 - convex/sandboxRuns.ts - CRUD mutations for sandbox runs with state validation
+- convex/actions/startSandboxRun.ts - E2B sandbox creation action with 'use node' directive
 - autonomous/prd.json - Story tracking for autonomous agent
 
 ---
@@ -120,5 +121,24 @@
   - Compares lastActivityAt against cutoff (now - maxIdleMs)
   - Critical for cron cleanup job in US-009
 - Files changed: convex/sandboxRuns.ts
+- Convex folder typechecks cleanly via `cd convex && npx tsc --noEmit`
+---
+
+## 2026-01-08 - US-008
+- Created convex/actions/startSandboxRun.ts - Core E2B integration action
+- Action features:
+  - Uses "use node" directive for Node.js runtime
+  - Takes threadId, workspaceId, prompt, optional maxDurationMs
+  - Creates sandboxRun record with status 'booting' via internalCreate
+  - Creates E2B sandbox using Sandbox.create() with metadata
+  - Updates sandboxRun with sandboxId and status 'running' on success
+  - On error: updates status to 'failed' with detailed error object
+  - Cleans up partially created sandbox on failure
+- Added internal mutations to sandboxRuns.ts:
+  - internalCreate: creates sandboxRun without auth checks (for action use)
+  - internalUpdate: updates sandboxRun without auth checks (for action use)
+- Updated _generated/api.d.ts with proper type definitions for internal mutations
+- Pattern: Actions use internal mutations, public mutations validate auth
+- Files changed: convex/actions/startSandboxRun.ts (new), convex/sandboxRuns.ts, convex/_generated/api.d.ts
 - Convex folder typechecks cleanly via `cd convex && npx tsc --noEmit`
 ---
