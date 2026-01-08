@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalMutation } from "./_generated/server";
 import { Id, Doc } from "./_generated/dataModel";
 import {
   SandboxStatus,
@@ -251,5 +251,132 @@ export const findIdle = query({
       // Must be idle longer than maxIdleMs
       return run.lastActivityAt < cutoffTime;
     });
+  },
+});
+
+// ============================================================================
+// Internal mutations (for use by actions)
+// ============================================================================
+
+/**
+ * Internal mutation to create a sandbox run (bypasses auth for action use)
+ * @param threadId - The thread this run is associated with
+ * @param workspaceId - The workspace this run belongs to
+ * @param createdBy - The user ID who created this run
+ * @param maxDurationMs - Optional maximum duration in milliseconds
+ * @param idleTimeoutMs - Optional idle timeout in milliseconds
+ * @returns The ID of the created sandbox run
+ */
+export const internalCreate = internalMutation({
+  args: {
+    threadId: v.string(),
+    workspaceId: v.id("workspaces"),
+    createdBy: v.string(),
+    maxDurationMs: v.optional(v.number()),
+    idleTimeoutMs: v.optional(v.number()),
+  },
+  handler: async (ctx, args): Promise<Id<"sandboxRuns">> => {
+    const now = Date.now();
+    const sandboxRunId = await ctx.db.insert("sandboxRuns", {
+      threadId: args.threadId,
+      workspaceId: args.workspaceId,
+      createdBy: args.createdBy,
+      status: "booting",
+      startedAt: now,
+      lastActivityAt: now,
+      maxDurationMs: args.maxDurationMs,
+      idleTimeoutMs: args.idleTimeoutMs,
+    });
+
+    return sandboxRunId;
+  },
+});
+
+/**
+ * Internal mutation to update a sandbox run (bypasses auth for action use)
+ * @param sandboxRunId - The ID of the sandbox run to update
+ * @param sandboxId - Optional E2B sandbox ID
+ * @param status - Optional new status (will be validated)
+ * @param finishedAt - Optional finished timestamp
+ * @param lastActivityAt - Optional last activity timestamp
+ * @param e2bCost - Optional E2B cost in dollars
+ * @param error - Optional error object
+ */
+export const internalUpdate = internalMutation({
+  args: {
+    sandboxRunId: v.id("sandboxRuns"),
+    sandboxId: v.optional(v.string()),
+    status: v.optional(
+      v.union(
+        v.literal("booting"),
+        v.literal("running"),
+        v.literal("succeeded"),
+        v.literal("failed"),
+        v.literal("canceled")
+      )
+    ),
+    finishedAt: v.optional(v.number()),
+    lastActivityAt: v.optional(v.number()),
+    e2bCost: v.optional(v.number()),
+    error: v.optional(
+      v.object({
+        message: v.string(),
+        code: v.optional(v.string()),
+        details: v.optional(v.string()),
+      })
+    ),
+  },
+  handler: async (ctx, args): Promise<void> => {
+    const sandboxRun = await ctx.db.get(args.sandboxRunId);
+    if (sandboxRun === null) {
+      throw new Error("Sandbox run not found");
+    }
+
+    // Validate status transition if status is being changed
+    if (args.status !== undefined && args.status !== sandboxRun.status) {
+      const isValid = validateTransition(
+        sandboxRun.status as SandboxStatus,
+        args.status as SandboxStatus
+      );
+      if (!isValid) {
+        throw new Error(
+          getTransitionError(
+            sandboxRun.status as SandboxStatus,
+            args.status as SandboxStatus
+          )
+        );
+      }
+    }
+
+    // Build update object with only provided fields
+    const updates: Partial<{
+      sandboxId: string;
+      status: typeof args.status;
+      finishedAt: number;
+      lastActivityAt: number;
+      e2bCost: number;
+      error: typeof args.error;
+    }> = {};
+
+    if (args.sandboxId !== undefined) {
+      updates.sandboxId = args.sandboxId;
+    }
+    if (args.status !== undefined) {
+      updates.status = args.status;
+    }
+    if (args.finishedAt !== undefined) {
+      updates.finishedAt = args.finishedAt;
+    }
+    if (args.lastActivityAt !== undefined) {
+      updates.lastActivityAt = args.lastActivityAt;
+    }
+    if (args.e2bCost !== undefined) {
+      updates.e2bCost = args.e2bCost;
+    }
+    if (args.error !== undefined) {
+      updates.error = args.error;
+    }
+
+    await ctx.db.patch(args.sandboxRunId, updates);
   },
 });

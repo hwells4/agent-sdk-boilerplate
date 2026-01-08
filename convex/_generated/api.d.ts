@@ -13,6 +13,40 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
+import type { Id } from "./dataModel";
+
+// Type definitions for internal mutations
+type SandboxRunsInternalCreate = FunctionReference<
+  "mutation",
+  "internal",
+  {
+    threadId: string;
+    workspaceId: Id<"workspaces">;
+    createdBy: string;
+    maxDurationMs?: number;
+    idleTimeoutMs?: number;
+  },
+  Id<"sandboxRuns">
+>;
+
+type SandboxRunsInternalUpdate = FunctionReference<
+  "mutation",
+  "internal",
+  {
+    sandboxRunId: Id<"sandboxRuns">;
+    sandboxId?: string;
+    status?: "booting" | "running" | "succeeded" | "failed" | "canceled";
+    finishedAt?: number;
+    lastActivityAt?: number;
+    e2bCost?: number;
+    error?: {
+      message: string;
+      code?: string;
+      details?: string;
+    };
+  },
+  void
+>;
 
 declare const fullApi: ApiFromModules<{}>;
 
@@ -37,9 +71,11 @@ export declare const api: FilterApi<
  * const myFunctionReference = internal.myModule.myFunction;
  * ```
  */
-export declare const internal: FilterApi<
-  typeof fullApi,
-  FunctionReference<any, "internal">
->;
+export declare const internal: {
+  sandboxRuns: {
+    internalCreate: SandboxRunsInternalCreate;
+    internalUpdate: SandboxRunsInternalUpdate;
+  };
+} & FilterApi<typeof fullApi, FunctionReference<any, "internal">>;
 
 export declare const components: {};
