@@ -18,10 +18,13 @@ for i in $(seq 1 $MAX_ITERATIONS); do
   echo "═══════════════════════════════════════"
   echo ""
 
-  # Pipe prompt into Claude Code with dangerous mode enabled
-  OUTPUT=$(cat "$SCRIPT_DIR/prompt.md" \
-    | claude --dangerously-skip-permissions 2>&1 \
-    | tee /dev/stderr) || true
+  # Pipe prompt into Claude Code with --print for visible output
+  LOG_FILE="$SCRIPT_DIR/iteration-$i.log"
+  cat "$SCRIPT_DIR/prompt.md" \
+    | claude --dangerously-skip-permissions --print 2>&1 \
+    | tee "$LOG_FILE" || true
+
+  OUTPUT=$(cat "$LOG_FILE")
 
   # Check for completion signal
   if echo "$OUTPUT" | grep -q "<promise>COMPLETE</promise>"; then

@@ -14,10 +14,13 @@ echo "         Running Single Iteration"
 echo "═══════════════════════════════════════"
 echo ""
 
-# Pipe prompt into Claude Code with dangerous mode enabled
-OUTPUT=$(cat "$SCRIPT_DIR/prompt.md" \
-  | claude --dangerously-skip-permissions 2>&1 \
-  | tee /dev/stderr) || true
+# Pipe prompt into Claude Code with --print for non-interactive output
+# Output streams directly to terminal so you can see progress
+cat "$SCRIPT_DIR/prompt.md" \
+  | claude --dangerously-skip-permissions --print 2>&1 \
+  | tee "$SCRIPT_DIR/last-run.log" || true
+
+OUTPUT="check last-run.log"
 
 echo ""
 echo "═══════════════════════════════════════"
