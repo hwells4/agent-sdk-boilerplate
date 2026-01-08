@@ -79,7 +79,7 @@
         "npx tsc --noEmit passes"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": "Multi-tenant access control"
     },
     {

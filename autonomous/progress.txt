@@ -66,3 +66,19 @@
 - Files changed: convex/workspaces.ts (new)
 - Convex folder typechecks cleanly via `cd convex && npx tsc --noEmit`
 ---
+
+## 2026-01-08 - US-005
+- Created convex/workspaceMembers.ts with full member management operations
+- Mutations:
+  - addMember: takes workspaceId, userId, role (admin/member), validates owner/admin access
+  - removeMember: takes workspaceId, userId, prevents owner removal
+  - updateRole: takes workspaceId, userId, newRole, prevents owner role change
+- Queries:
+  - listMembers: takes workspaceId, returns all members (requires membership)
+  - getUserWorkspaces: returns workspaces with user's role in each
+- Role validation: only owner or admin can add/remove/update members
+- Helper functions: getUserMembership, canManageMembers
+- All functions use ctx.auth.getUserIdentity() for authentication
+- Files changed: convex/workspaceMembers.ts (new)
+- Convex folder typechecks cleanly via `cd convex && npx tsc --noEmit`
+---
