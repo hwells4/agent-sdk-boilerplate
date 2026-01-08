@@ -148,7 +148,7 @@
         "npx tsc --noEmit passes"
       ],
       "priority": 9,
-      "passes": false,
+      "passes": true,
       "notes": "Prevents runaway sandbox costs"
     },
     {

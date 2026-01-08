@@ -14,6 +14,8 @@
 - convex/lib/stateMachine.ts - State machine for sandbox run status transitions
 - convex/sandboxRuns.ts - CRUD mutations for sandbox runs with state validation
 - convex/actions/startSandboxRun.ts - E2B sandbox creation action with 'use node' directive
+- convex/actions/killIdleSandboxes.ts - Cron action to kill idle E2B sandboxes
+- convex/crons.ts - Cron job definitions (killIdleSandboxes runs every 30s)
 - autonomous/prd.json - Story tracking for autonomous agent
 
 ---
@@ -140,5 +142,30 @@
 - Updated _generated/api.d.ts with proper type definitions for internal mutations
 - Pattern: Actions use internal mutations, public mutations validate auth
 - Files changed: convex/actions/startSandboxRun.ts (new), convex/sandboxRuns.ts, convex/_generated/api.d.ts
+- Convex folder typechecks cleanly via `cd convex && npx tsc --noEmit`
+---
+
+## 2026-01-08 - US-009
+- Created convex/actions/killIdleSandboxes.ts - Idle sandbox cleanup action
+- Action features:
+  - Uses "use node" directive for Node.js runtime
+  - Queries internalFindIdle with 15 minute idle timeout (15 * 60 * 1000 ms)
+  - Connects to each idle sandbox using Sandbox.connect(sandboxId)
+  - Kills sandbox with sandbox.kill()
+  - Updates run status to 'canceled' with finishedAt timestamp
+  - Graceful error handling: continues processing if sandbox already dead
+  - Returns { killed: number, errors: number } for observability
+- Created convex/crons.ts with cronJobs()
+  - Schedules killIdleSandboxes every 30 seconds via crons.interval()
+  - Prevents runaway E2B sandbox costs
+- Added internalFindIdle query to sandboxRuns.ts:
+  - Internal version of findIdle for use by actions
+  - Same logic: finds running sandboxes with sandboxId where idle > maxIdleMs
+- Updated _generated/api.d.ts with:
+  - SandboxRunsInternalFindIdle type for internal query
+  - KillIdleSandboxesAction type for the cleanup action
+  - Expanded internal object with actions.killIdleSandboxes namespace
+- Pattern: Cron jobs invoke internal actions which use internal queries/mutations
+- Files changed: convex/actions/killIdleSandboxes.ts (new), convex/crons.ts (new), convex/sandboxRuns.ts, convex/_generated/api.d.ts
 - Convex folder typechecks cleanly via `cd convex && npx tsc --noEmit`
 ---
