@@ -1,9 +1,25 @@
 # Progress Log
 
 ## Codebase Patterns
-<!-- Add patterns here as you discover them -->
+- Convex init command is deprecated; use `npx convex dev --once --configure=new` or create structure manually
+- For local-only development without deployment, create stub _generated files manually
+- Convex requires `npx convex dev` running to regenerate types; stub files enable offline typechecking
+- Pre-existing TypeScript errors exist in examples/ folder - not blocking Convex work
 
 ## Key Files
-<!-- Add important files here as you discover them -->
+- convex/schema.ts - Convex database schema definition
+- convex/_generated/ - Auto-generated type definitions (can be stubbed for local dev)
+- convex/tsconfig.json - TypeScript config for Convex functions
+- autonomous/prd.json - Story tracking for autonomous agent
 
+---
+
+## 2026-01-08 - US-001
+- Installed convex (^1.31.3) and @convex-dev/agent (^0.3.2) packages
+- Created convex/ directory with base structure
+- Created convex/_generated/ with stub type files (api.d.ts, api.js, dataModel.d.ts, server.d.ts, server.js)
+- Created minimal convex/schema.ts as foundation for future tables
+- Files changed: package.json, package-lock.json, convex/* (new)
+- Gotcha: `npx convex init` is deprecated - manual setup or `convex dev --once` required
+- Gotcha: _generated folder requires live deployment to auto-generate; stub files work for local typecheck
 ---
