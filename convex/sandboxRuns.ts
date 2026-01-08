@@ -1,6 +1,6 @@
 import { v } from "convex/values";
-import { mutation } from "./_generated/server";
-import { Id } from "./_generated/dataModel";
+import { mutation, query } from "./_generated/server";
+import { Id, Doc } from "./_generated/dataModel";
 import {
   SandboxStatus,
   validateTransition,
@@ -167,5 +167,89 @@ export const update = mutation({
     }
 
     await ctx.db.patch(args.sandboxRunId, updates);
+  },
+});
+
+/**
+ * Get a sandbox run by ID
+ * @param sandboxRunId - The ID of the sandbox run
+ * @returns The sandbox run or null if not found
+ */
+export const get = query({
+  args: {
+    sandboxRunId: v.id("sandboxRuns"),
+  },
+  handler: async (ctx, args): Promise<Doc<"sandboxRuns"> | null> => {
+    return await ctx.db.get(args.sandboxRunId);
+  },
+});
+
+/**
+ * List all sandbox runs for a workspace
+ * @param workspaceId - The workspace ID
+ * @returns Array of sandbox runs
+ */
+export const listByWorkspace = query({
+  args: {
+    workspaceId: v.id("workspaces"),
+  },
+  handler: async (ctx, args): Promise<Doc<"sandboxRuns">[]> => {
+    return await ctx.db
+      .query("sandboxRuns")
+      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
+      .collect();
+  },
+});
+
+/**
+ * List all sandbox runs for a thread
+ * @param threadId - The thread ID
+ * @returns Array of sandbox runs
+ */
+export const listByThread = query({
+  args: {
+    threadId: v.string(),
+  },
+  handler: async (ctx, args): Promise<Doc<"sandboxRuns">[]> => {
+    return await ctx.db
+      .query("sandboxRuns")
+      .withIndex("by_thread", (q) => q.eq("threadId", args.threadId))
+      .collect();
+  },
+});
+
+/**
+ * Find idle running sandboxes that should be cleaned up
+ * Returns sandboxes where:
+ * - status is 'running'
+ * - sandboxId exists (sandbox was actually created)
+ * - (now - lastActivityAt) > maxIdleMs
+ *
+ * @param maxIdleMs - Maximum idle time in milliseconds
+ * @returns Array of idle sandbox runs
+ */
+export const findIdle = query({
+  args: {
+    maxIdleMs: v.number(),
+  },
+  handler: async (ctx, args): Promise<Doc<"sandboxRuns">[]> => {
+    const now = Date.now();
+    const cutoffTime = now - args.maxIdleMs;
+
+    // Get all running sandboxes
+    const runningSandboxes = await ctx.db
+      .query("sandboxRuns")
+      .withIndex("by_status", (q) => q.eq("status", "running"))
+      .collect();
+
+    // Filter to idle sandboxes with a valid sandboxId
+    return runningSandboxes.filter((run) => {
+      // Must have a sandboxId (sandbox was actually created)
+      if (run.sandboxId === undefined) {
+        return false;
+      }
+      // Must be idle longer than maxIdleMs
+      return run.lastActivityAt < cutoffTime;
+    });
   },
 });
