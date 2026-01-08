@@ -109,7 +109,7 @@ export async function runPythonAgent(config: AgentConfig): Promise<string> {
         console.log('Sandbox started. Running Python agent...')
       }
 
-      // Python agent code with Braintrust integration
+      // Python agent code with ClaudeSDKClient and Braintrust integration
       const pythonAgentCode = `
 import asyncio
 import json
@@ -138,47 +138,64 @@ if os.getenv('BRAINTRUST_API_KEY'):
     except Exception as e:
         print(f"Warning: Failed to initialize Braintrust: {e}", file=sys.stderr)
 
-from claude_agent_sdk import query
+from claude_agent_sdk import (
+    ClaudeSDKClient,
+    ClaudeAgentOptions,
+    AssistantMessage,
+    TextBlock,
+    ResultMessage
+)
 
 async def main():
     result = None
     usage_data = None
     prompt = json.loads(${JSON.stringify(JSON.stringify(prompt))})
 
+    # Configure agent with proper permissions for autonomous operation
+    options = ClaudeAgentOptions(
+        allowed_tools=["Read", "Write", "Edit", "Bash", "Glob", "Grep", "WebFetch", "WebSearch"],
+        permission_mode="bypassPermissions",  # Autonomous operation - no permission prompts
+        cwd="/home/user",
+    )
+
     if braintrust_enabled:
         # Wrap agent execution in Braintrust span
         with braintrust.start_span(name="agent_execution") as span:
             span.log(input=prompt)
 
-            async for msg in query(prompt=prompt):
-                if hasattr(msg, "result"):
+            async with ClaudeSDKClient(options=options) as client:
+                await client.query(prompt)
+                async for msg in client.receive_response():
+                    if isinstance(msg, ResultMessage):
+                        result = msg.result
+                        # Extract usage metrics if available
+                        if msg.usage:
+                            usage_data = {
+                                "input_tokens": int(msg.usage.get('input_tokens', 0)),
+                                "output_tokens": int(msg.usage.get('output_tokens', 0)),
+                                "cache_read_input_tokens": int(msg.usage.get('cache_read_input_tokens', 0))
+                            }
+                            span.log(metrics={
+                                "promptTokens": int(usage_data['input_tokens']),
+                                "completionTokens": int(usage_data['output_tokens']),
+                                "cachedTokens": int(usage_data['cache_read_input_tokens']),
+                            })
+
+            span.log(output=result)
+    else:
+        # Run without observability
+        async with ClaudeSDKClient(options=options) as client:
+            await client.query(prompt)
+            async for msg in client.receive_response():
+                if isinstance(msg, ResultMessage):
                     result = msg.result
                     # Extract usage metrics if available
-                    if hasattr(msg, 'usage') and msg.usage:
+                    if msg.usage:
                         usage_data = {
                             "input_tokens": int(msg.usage.get('input_tokens', 0)),
                             "output_tokens": int(msg.usage.get('output_tokens', 0)),
                             "cache_read_input_tokens": int(msg.usage.get('cache_read_input_tokens', 0))
                         }
-                        span.log(metrics={
-                            "promptTokens": int(usage_data['input_tokens']),
-                            "completionTokens": int(usage_data['output_tokens']),
-                            "cachedTokens": int(usage_data['cache_read_input_tokens']),
-                        })
-
-            span.log(output=result)
-    else:
-        # Run without observability
-        async for msg in query(prompt=prompt):
-            if hasattr(msg, "result"):
-                result = msg.result
-                # Extract usage metrics if available
-                if hasattr(msg, 'usage') and msg.usage:
-                    usage_data = {
-                        "input_tokens": int(msg.usage.get('input_tokens', 0)),
-                        "output_tokens": int(msg.usage.get('output_tokens', 0)),
-                        "cache_read_input_tokens": int(msg.usage.get('cache_read_input_tokens', 0))
-                    }
 
     # Output result and usage as JSON to stdout for TypeScript parsing
     output = {
@@ -362,7 +379,7 @@ export async function runPythonAgentDetailed(config: AgentConfig): Promise<Agent
     })
 
     try {
-      // Use the same Python agent code as runPythonAgent (with Braintrust support)
+      // Use ClaudeSDKClient with proper options (with Braintrust support)
       const pythonAgentCode = `
 import asyncio
 import json
@@ -382,38 +399,51 @@ if os.getenv('BRAINTRUST_API_KEY'):
     except Exception as e:
         print(f"Warning: Failed to initialize Braintrust: {e}", file=sys.stderr)
 
-from claude_agent_sdk import query
+from claude_agent_sdk import (
+    ClaudeSDKClient,
+    ClaudeAgentOptions,
+    ResultMessage
+)
 
 async def main():
     result = None
     usage_data = None
     prompt = json.loads(${JSON.stringify(JSON.stringify(prompt))})
 
+    # Configure agent with proper permissions for autonomous operation
+    options = ClaudeAgentOptions(
+        allowed_tools=["Read", "Write", "Edit", "Bash", "Glob", "Grep", "WebFetch", "WebSearch"],
+        permission_mode="bypassPermissions",
+        cwd="/home/user",
+    )
+
     if braintrust_enabled:
         with braintrust.start_span(name="agent_execution") as span:
             span.log(input=prompt)
-            async for msg in query(prompt=prompt):
-                if hasattr(msg, "result"):
+            async with ClaudeSDKClient(options=options) as client:
+                await client.query(prompt)
+                async for msg in client.receive_response():
+                    if isinstance(msg, ResultMessage):
+                        result = msg.result
+                        if msg.usage:
+                            usage_data = {
+                                "input_tokens": int(msg.usage.get('input_tokens', 0)),
+                                "output_tokens": int(msg.usage.get('output_tokens', 0)),
+                                "cache_read_input_tokens": int(msg.usage.get('cache_read_input_tokens', 0))
+                            }
+            span.log(output=result)
+    else:
+        async with ClaudeSDKClient(options=options) as client:
+            await client.query(prompt)
+            async for msg in client.receive_response():
+                if isinstance(msg, ResultMessage):
                     result = msg.result
-                    # Extract usage metrics if available
-                    if hasattr(msg, 'usage') and msg.usage:
+                    if msg.usage:
                         usage_data = {
                             "input_tokens": int(msg.usage.get('input_tokens', 0)),
                             "output_tokens": int(msg.usage.get('output_tokens', 0)),
                             "cache_read_input_tokens": int(msg.usage.get('cache_read_input_tokens', 0))
                         }
-            span.log(output=result)
-    else:
-        async for msg in query(prompt=prompt):
-            if hasattr(msg, "result"):
-                result = msg.result
-                # Extract usage metrics if available
-                if hasattr(msg, 'usage') and msg.usage:
-                    usage_data = {
-                        "input_tokens": int(msg.usage.get('input_tokens', 0)),
-                        "output_tokens": int(msg.usage.get('output_tokens', 0)),
-                        "cache_read_input_tokens": int(msg.usage.get('cache_read_input_tokens', 0))
-                    }
 
     # Output result and usage as JSON to stdout for TypeScript parsing
     output = {
@@ -551,12 +581,21 @@ export async function runPythonAgentStreaming(
       const events: any[] = []
       const realtimeMode = observability?.mode === 'realtime'
 
-    // Python streaming agent code
+    // Python streaming agent code with ClaudeSDKClient
     const pythonStreamingCode = `
 import asyncio
 import json
 import sys
-from claude_agent_sdk import query
+from claude_agent_sdk import (
+    ClaudeSDKClient,
+    ClaudeAgentOptions,
+    AssistantMessage,
+    TextBlock,
+    ThinkingBlock,
+    ToolUseBlock,
+    ToolResultBlock,
+    ResultMessage
+)
 
 def emit(event_type: str, data: dict):
     """Emit structured JSON event to stdout"""
@@ -568,55 +607,62 @@ async def main():
 
     emit("start", {"prompt": prompt})
 
+    # Configure agent with proper permissions for autonomous operation
+    options = ClaudeAgentOptions(
+        allowed_tools=["Read", "Write", "Edit", "Bash", "Glob", "Grep", "WebFetch", "WebSearch"],
+        permission_mode="bypassPermissions",  # Autonomous operation - no permission prompts
+        cwd="/home/user",
+        include_partial_messages=True,  # Enable streaming of partial messages
+    )
+
     try:
         result = None
-        async for msg in query(prompt=prompt):
-            # Handle AssistantMessage with content blocks
-            if hasattr(msg, "content") and isinstance(msg.content, list):
-                for block in msg.content:
-                    if hasattr(block, "text"):
-                        emit("text", {"text": block.text})
-                    elif hasattr(block, "thinking"):
-                        emit("thinking", {
-                            "thinking": block.thinking,
-                            "signature": getattr(block, "signature", "")
-                        })
-                    elif hasattr(block, "name"):  # ToolUseBlock
-                        emit("tool_use", {
-                            "id": block.id,
-                            "name": block.name,
-                            "input": block.input
-                        })
-                    elif hasattr(block, "tool_use_id"):  # ToolResultBlock
-                        emit("tool_result", {
-                            "tool_use_id": block.tool_use_id,
-                            "content": str(block.content),
-                            "is_error": getattr(block, "is_error", False)
-                        })
+        async with ClaudeSDKClient(options=options) as client:
+            await client.query(prompt)
+            async for msg in client.receive_messages():
+                # Handle AssistantMessage with content blocks
+                if isinstance(msg, AssistantMessage):
+                    for block in msg.content:
+                        if isinstance(block, TextBlock):
+                            emit("text", {"text": block.text})
+                        elif isinstance(block, ThinkingBlock):
+                            emit("thinking", {
+                                "thinking": block.thinking,
+                                "signature": getattr(block, "signature", "")
+                            })
+                        elif isinstance(block, ToolUseBlock):
+                            emit("tool_use", {
+                                "id": block.id,
+                                "name": block.name,
+                                "input": block.input
+                            })
+                        elif isinstance(block, ToolResultBlock):
+                            emit("tool_result", {
+                                "tool_use_id": block.tool_use_id,
+                                "content": str(block.content) if block.content else "",
+                                "is_error": getattr(block, "is_error", False)
+                            })
 
-            # Handle ResultMessage
-            if hasattr(msg, "result"):
-                result = msg.result
-                # Extract usage metrics if available
-                usage_info = {}
-                if hasattr(msg, 'usage') and msg.usage:
-                    usage_info = {
-                        "input_tokens": int(msg.usage.get('input_tokens', 0)),
-                        "output_tokens": int(msg.usage.get('output_tokens', 0)),
-                        "cache_read_input_tokens": int(msg.usage.get('cache_read_input_tokens', 0))
-                    }
+                # Handle ResultMessage
+                if isinstance(msg, ResultMessage):
+                    result = msg.result
+                    # Extract usage metrics if available
+                    usage_info = {}
+                    if msg.usage:
+                        usage_info = {
+                            "input_tokens": int(msg.usage.get('input_tokens', 0)),
+                            "output_tokens": int(msg.usage.get('output_tokens', 0)),
+                            "cache_read_input_tokens": int(msg.usage.get('cache_read_input_tokens', 0))
+                        }
 
-                emit("result", {
-                    "result": result,
-                    "duration_ms": getattr(msg, "duration_ms", 0),
-                    "cost": getattr(msg, "total_cost_usd", 0),
-                    "num_turns": getattr(msg, "num_turns", 0),
-                    "usage": usage_info
-                })
-
-            # Handle errors
-            if hasattr(msg, "error") and msg.error:
-                emit("error", {"error": msg.error, "message": str(msg)})
+                    emit("result", {
+                        "result": result,
+                        "duration_ms": msg.duration_ms if hasattr(msg, 'duration_ms') else 0,
+                        "cost": msg.total_cost_usd if hasattr(msg, 'total_cost_usd') else 0,
+                        "num_turns": msg.num_turns if hasattr(msg, 'num_turns') else 0,
+                        "usage": usage_info
+                    })
+                    break  # Exit after receiving result
 
         emit("complete", {"status": "success", "result": result})
 
