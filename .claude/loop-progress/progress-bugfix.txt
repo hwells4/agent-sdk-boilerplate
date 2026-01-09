@@ -8,6 +8,8 @@ Verify: (none)
 - Empty result for unauthorized access: `{ page: [], continueCursor: "", isDone: true }`
 - Denormalization: For efficient queries that filter on parent entity fields, denormalize the field onto the child table
 - Composite indexes: Use `.index("name", [field1, field2])` for queries filtering on multiple fields
+- Race condition prevention: Re-fetch document state immediately before update, not at authorization check time
+- Graceful terminal state handling: Use `skipTerminalStates` option for cron jobs that may race with normal completion
 
 ---
 
@@ -31,5 +33,16 @@ Verify: (none)
   - `convex/artifacts.ts`: Added `backfillWorkspaceId` internal mutation for existing data
 - Learnings: Type assertion `(artifact as { workspaceId?: unknown }).workspaceId` needed for backfill of optional-in-runtime field
 - Performance: Query now O(1) database reads regardless of pending artifact count
+---
+
+## 2026-01-09 - claude-agent-sdk-experiments-xoi
+- Fixed race condition in concurrent status updates
+- Files changed:
+  - `convex/sandboxRuns.ts`: Refactored `performSandboxRunUpdate` to re-fetch document state before patching
+  - `convex/sandboxRuns.ts`: Added `UpdateResult` type with `{updated, skipped, reason}`
+  - `convex/sandboxRuns.ts`: Added `skipTerminalStates` option to `internalUpdate` for graceful cron handling
+  - `convex/actions/killIdleSandboxes.ts`: Use `skipTerminalStates: true`, track skipped count in logs
+- Learnings: Authorization checks may stale-read document state; always re-fetch before state-dependent operations
+- Gotchas: Cron job queries can return sandboxes that complete between query and update - handle with `skipTerminalStates`
 ---
 
