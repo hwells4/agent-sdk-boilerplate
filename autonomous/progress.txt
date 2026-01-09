@@ -392,3 +392,23 @@
 - Convex folder typechecks cleanly via `cd convex && npx tsc --noEmit`
 - Pattern: Promise.all is preferred over sequential for loops for independent async operations
 ---
+
+## 2026-01-08 - US-025
+- Used shared validators across schema and mutations for single source of truth
+- Changes to convex/schema.ts:
+  - Imported sandboxStatusValidator, artifactTypeValidator, reviewStateValidator, memberRoleValidator from ./lib/validators
+  - Replaced inline v.union(v.literal(...)) for workspaceMembers.role with memberRoleValidator
+  - Replaced inline v.union(v.literal(...)) for sandboxRuns.status with sandboxStatusValidator
+  - Replaced inline v.union(v.literal(...)) for artifacts.type with artifactTypeValidator
+  - Replaced inline v.union(v.literal(...)) for artifacts.reviewState with reviewStateValidator
+- Changes to convex/sandboxRuns.ts:
+  - Imported sandboxStatusValidator from ./lib/validators
+  - Replaced inline status validators in create, update, and internalUpdate mutations
+- Changes to convex/artifacts.ts:
+  - Imported artifactTypeValidator and reviewStateValidator from ./lib/validators
+  - Replaced inline type validator in create and internalCreate mutations
+  - Replaced inline reviewState validator in updateReviewState mutation
+- Files changed: convex/schema.ts, convex/sandboxRuns.ts, convex/artifacts.ts
+- Convex folder typechecks cleanly via `cd convex && npx tsc --noEmit`
+- Note: workspaceMembers.ts addMember/updateRole still use v.union(v.literal("admin"), v.literal("member")) intentionally (excludes "owner" which cannot be added/changed)
+---

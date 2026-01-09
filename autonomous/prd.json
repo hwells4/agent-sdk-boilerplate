@@ -400,7 +400,7 @@
         "npx tsc --noEmit passes"
       ],
       "priority": 25,
-      "passes": false,
+      "passes": true,
       "notes": "Phase 4 P3 Nice-to-have - Single source of truth for validators. DEPENDS ON US-013."
     },
     {
