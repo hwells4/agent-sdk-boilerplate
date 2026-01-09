@@ -67,16 +67,21 @@ export const killIdleSandboxes = internalAction({
       }
 
       // Update the run status to 'canceled' with finishedAt
-      await ctx.runMutation(internal.sandboxRuns.internalUpdate, {
+      // Use skipTerminalStates to gracefully handle sandboxes that completed
+      // between the query and this update (prevents race condition errors)
+      const result = await ctx.runMutation(internal.sandboxRuns.internalUpdate, {
         sandboxRunId: run._id,
         status: "canceled",
         finishedAt: Date.now(),
+        skipTerminalStates: true,
       });
 
-      return true;
+      // Return whether we actually killed it (not just skipped)
+      return result.updated;
     };
 
     // Process in batches of 10 for parallelization
+    let skipped = 0;
     const BATCH_SIZE = 10;
     for (let i = 0; i < allRuns.length; i += BATCH_SIZE) {
       const batch = allRuns.slice(i, i + BATCH_SIZE);
@@ -84,7 +89,12 @@ export const killIdleSandboxes = internalAction({
 
       for (const result of results) {
         if (result.status === "fulfilled") {
-          killed++;
+          if (result.value) {
+            killed++;
+          } else {
+            // Sandbox was already in terminal state - this is expected (not an error)
+            skipped++;
+          }
         } else {
           console.error(
             `Failed to kill sandbox run: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`
@@ -95,7 +105,7 @@ export const killIdleSandboxes = internalAction({
     }
 
     console.log(
-      `Sandbox cleanup: killed ${killed}, errors ${errors}, total found ${allRuns.length} (idle: ${idleRuns.length}, stuck booting: ${stuckBootingRuns.length})`
+      `Sandbox cleanup: killed ${killed}, skipped ${skipped} (already terminated), errors ${errors}, total found ${allRuns.length} (idle: ${idleRuns.length}, stuck booting: ${stuckBootingRuns.length})`
     );
 
     return { killed, errors };

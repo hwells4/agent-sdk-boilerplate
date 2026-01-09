@@ -4,6 +4,7 @@ import { mutation, query, internalMutation, internalQuery, MutationCtx } from ".
 import { Id, Doc } from "./_generated/dataModel";
 import {
   SandboxStatus,
+  VALID_TRANSITIONS,
   validateTransition,
   getTransitionError,
 } from "./lib/stateMachine";
@@ -27,29 +28,62 @@ type SandboxRunUpdateArgs = {
 };
 
 /**
+ * Result of a sandbox run update operation
+ */
+type UpdateResult = {
+  updated: boolean;
+  skipped: boolean;
+  reason?: string;
+};
+
+/**
  * Shared helper to perform sandbox run updates
- * Handles: fetching run, validating transition, building update object, patching DB
+ * Handles: re-fetching current state, validating transition, building update object, patching DB
+ *
+ * IMPORTANT: Re-fetches the current document state to prevent race conditions.
+ * Between the initial authorization check and the actual update, another concurrent
+ * update could change the status. By re-fetching, we validate against the actual
+ * current database state.
+ *
  * @param ctx - The mutation context
  * @param sandboxRunId - The ID of the sandbox run to update
- * @param sandboxRun - The current sandbox run document
  * @param args - The update arguments
+ * @param options - Optional behavior configuration
+ * @param options.skipTerminalStates - If true, silently skip updates when sandbox is already in terminal state
+ * @returns UpdateResult indicating whether the update was applied
  */
 async function performSandboxRunUpdate(
   ctx: MutationCtx,
   sandboxRunId: Id<"sandboxRuns">,
-  sandboxRun: Doc<"sandboxRuns">,
-  args: SandboxRunUpdateArgs
-): Promise<void> {
+  args: SandboxRunUpdateArgs,
+  options: { skipTerminalStates?: boolean } = {}
+): Promise<UpdateResult> {
+  // Re-fetch current state to prevent race conditions
+  // Between initial fetch and now, another update could have changed the status
+  const currentRun = await ctx.db.get(sandboxRunId);
+  if (currentRun === null) {
+    throw new Error("Sandbox run not found");
+  }
+
   // Validate status transition if status is being changed
-  if (args.status !== undefined && args.status !== sandboxRun.status) {
+  if (args.status !== undefined && args.status !== currentRun.status) {
     const isValid = validateTransition(
-      sandboxRun.status as SandboxStatus,
+      currentRun.status as SandboxStatus,
       args.status as SandboxStatus
     );
     if (!isValid) {
+      // Check if we should silently skip for terminal states
+      const isTerminal = VALID_TRANSITIONS[currentRun.status as SandboxStatus].length === 0;
+      if (options.skipTerminalStates && isTerminal) {
+        return {
+          updated: false,
+          skipped: true,
+          reason: `Sandbox already in terminal state '${currentRun.status}'`,
+        };
+      }
       throw new Error(
         getTransitionError(
-          sandboxRun.status as SandboxStatus,
+          currentRun.status as SandboxStatus,
           args.status as SandboxStatus
         )
       );
@@ -69,6 +103,7 @@ async function performSandboxRunUpdate(
   );
 
   await ctx.db.patch(sandboxRunId, updates);
+  return { updated: true, skipped: false };
 }
 
 /**
@@ -162,13 +197,14 @@ export const update = mutation({
   },
   handler: async (ctx, args): Promise<void> => {
     // Authorization check using shared helper
+    // Note: performSandboxRunUpdate will re-fetch the document to prevent race conditions
     const access = await getSandboxRunAccess(ctx, args.sandboxRunId);
     if (access === null) {
       throw new Error("Unauthorized: sandbox run not found or access denied");
     }
 
-    // Use shared helper for update logic
-    await performSandboxRunUpdate(ctx, args.sandboxRunId, access.sandboxRun, {
+    // Use shared helper for update logic (re-fetches current state internally)
+    await performSandboxRunUpdate(ctx, args.sandboxRunId, {
       sandboxId: args.sandboxId,
       status: args.status,
       finishedAt: args.finishedAt,
@@ -307,6 +343,8 @@ export const internalCreate = internalMutation({
  * @param lastActivityAt - Optional last activity timestamp
  * @param e2bCost - Optional E2B cost in dollars
  * @param error - Optional error object
+ * @param skipTerminalStates - If true, silently skip when sandbox already in terminal state (for cron job)
+ * @returns Object with updated/skipped flags and optional reason
  */
 export const internalUpdate = internalMutation({
   args: {
@@ -323,22 +361,23 @@ export const internalUpdate = internalMutation({
         details: v.optional(v.string()),
       })
     ),
+    skipTerminalStates: v.optional(v.boolean()),
   },
-  handler: async (ctx, args): Promise<void> => {
-    const sandboxRun = await ctx.db.get(args.sandboxRunId);
-    if (sandboxRun === null) {
-      throw new Error("Sandbox run not found");
-    }
-
-    // Use shared helper for update logic
-    await performSandboxRunUpdate(ctx, args.sandboxRunId, sandboxRun, {
-      sandboxId: args.sandboxId,
-      status: args.status,
-      finishedAt: args.finishedAt,
-      lastActivityAt: args.lastActivityAt,
-      e2bCost: args.e2bCost,
-      error: args.error,
-    });
+  handler: async (ctx, args): Promise<{ updated: boolean; skipped: boolean; reason?: string }> => {
+    // Use shared helper for update logic (handles existence check and re-fetches current state)
+    return await performSandboxRunUpdate(
+      ctx,
+      args.sandboxRunId,
+      {
+        sandboxId: args.sandboxId,
+        status: args.status,
+        finishedAt: args.finishedAt,
+        lastActivityAt: args.lastActivityAt,
+        e2bCost: args.e2bCost,
+        error: args.error,
+      },
+      { skipTerminalStates: args.skipTerminalStates ?? false }
+    );
   },
 });
 
