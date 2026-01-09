@@ -14,6 +14,7 @@
 - convex/lib/stateMachine.ts - State machine for sandbox run status transitions
 - convex/lib/constants.ts - Shared timeout constants (IDLE_TIMEOUT_MS, BOOT_TIMEOUT_MS, DEFAULT_MAX_DURATION_MS)
 - convex/lib/validators.ts - Shared Convex validators (sandboxStatusValidator, artifactTypeValidator, reviewStateValidator, memberRoleValidator)
+- convex/lib/authorization.ts - Shared authorization helpers (getUserMembership, requireWorkspaceMembership, getSandboxRunAccess, getArtifactAccess)
 - convex/sandboxRuns.ts - CRUD mutations for sandbox runs with state validation
 - convex/artifacts.ts - CRUD mutations for artifacts with HITL review workflow
 - convex/actions/startSandboxRun.ts - E2B sandbox creation action with 'use node' directive
@@ -247,4 +248,22 @@
 - Files changed: convex/schema.ts, convex/_generated/api.d.ts
 - Convex folder typechecks cleanly; convex dev --typecheck=enable --once passes
 - These indexes enable the upcoming US-014 shared authorization module
+---
+
+## 2026-01-08 - US-014
+- Created convex/lib/authorization.ts with shared authorization helpers
+- Exports:
+  - getUserMembership(ctx, workspaceId): Returns Doc<"workspaceMembers"> or null
+    - Uses by_workspace_user composite index for O(1) lookup
+  - requireWorkspaceMembership(ctx, workspaceId, requiredRoles?): Returns membership or throws
+    - Validates authentication, membership, and optional role requirements
+  - getSandboxRunAccess(ctx, sandboxRunId): Returns {sandboxRun, membership} or null
+    - Fetches sandbox run and verifies workspace membership
+  - getArtifactAccess(ctx, artifactId): Returns {artifact, sandboxRun, membership} or null
+    - Fetches artifact, its sandbox run, and verifies workspace membership
+- Uses proper TypeScript types: QueryCtx, MutationCtx from convex/_generated/server
+- Defines AuthContext union type for flexibility in query and mutation handlers
+- Exports MemberRole type ("owner" | "admin" | "member") and interface types for access results
+- Files changed: convex/lib/authorization.ts (new)
+- Convex folder typechecks cleanly via `cd convex && npx tsc --noEmit`
 ---

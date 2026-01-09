@@ -226,7 +226,7 @@
         "npx tsc --noEmit passes"
       ],
       "priority": 14,
-      "passes": false,
+      "passes": true,
       "notes": "Phase 1 Foundation - Shared authorization helpers with proper types. DEPENDS ON US-015 for composite index."
     },
     {
