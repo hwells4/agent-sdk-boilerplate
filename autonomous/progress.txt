@@ -360,3 +360,20 @@
 - Convex folder typechecks cleanly via `cd convex && npx tsc --noEmit`
 - Security: Prevents admin proliferation where admins could create more admins
 ---
+
+## 2026-01-08 - US-023
+- Deduplicated sandboxRuns update logic to reduce maintenance burden
+- Created performSandboxRunUpdate helper function (not exported):
+  - Handles status transition validation using validateTransition
+  - Builds update object using Object.fromEntries with undefined filter
+  - Patches the database with the update object
+- Refactored update mutation:
+  - Auth check via getSandboxRunAccess
+  - Calls performSandboxRunUpdate helper after auth check
+- Refactored internalUpdate mutation:
+  - Fetches sandbox run directly
+  - Calls performSandboxRunUpdate helper directly
+- Files changed: convex/sandboxRuns.ts, convex/_generated/api.d.ts
+- Convex folder typechecks cleanly via `cd convex && npx tsc --noEmit`
+- Pattern: Object.fromEntries with filter is a clean way to build partial update objects
+---
