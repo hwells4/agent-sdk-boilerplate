@@ -14,6 +14,7 @@ Verify: (none)
 - Consistency validation: When denormalizing, validate that child entity's FK matches parent entity's expected value
 - Privilege escalation prevention: For role changes that involve admin privileges, require owner role (not just admin)
 - Batch operations for cascade deletion: Use Promise.all with proper ordering (children before parents) to avoid timeout
+- Type derivation: Use `Infer<typeof validator>` from convex/values to derive types from validators, re-export for backward compatibility
 
 ---
 
@@ -83,5 +84,16 @@ Verify: (none)
   6. Delete workspace
 - Learnings: Promise.all for batch deletes maintains order when awaited sequentially between steps
 - Performance: O(4) round-trips instead of O(runs + artifacts + members) for large workspaces
+---
+
+## 2026-01-09 - claude-agent-sdk-experiments-dzq
+- Fixed type duplication by deriving types from validators using Convex's Infer
+- Files changed:
+  - `convex/lib/validators.ts`: Added `SandboxStatus` and `MemberRole` types using `Infer<typeof validator>`
+  - `convex/lib/stateMachine.ts`: Import and re-export `SandboxStatus` from validators (removed inline type definition)
+  - `convex/lib/authorization.ts`: Import and re-export `MemberRole` from validators (removed inline type definition)
+  - `convex/sandboxRuns.ts`: Removed `as SandboxStatus` casts, updated `SandboxRunUpdateArgs` type
+- Learnings: Re-export types with `export type { TypeName }` for backward compatibility with existing imports
+- Benefits: TypeScript now catches type mismatches at compile time; single source of truth eliminates drift
 ---
 
