@@ -6,6 +6,7 @@ import {
   validateTransition,
   getTransitionError,
 } from "./lib/stateMachine";
+import { getUserMembership, getSandboxRunAccess } from "./lib/authorization";
 
 /**
  * SandboxRun mutations
@@ -111,15 +112,12 @@ export const update = mutation({
     ),
   },
   handler: async (ctx, args): Promise<void> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (identity === null) {
-      throw new Error("Unauthenticated: must be logged in to update a sandbox run");
+    // Authorization check using shared helper
+    const access = await getSandboxRunAccess(ctx, args.sandboxRunId);
+    if (access === null) {
+      throw new Error("Unauthorized: sandbox run not found or access denied");
     }
-
-    const sandboxRun = await ctx.db.get(args.sandboxRunId);
-    if (sandboxRun === null) {
-      throw new Error("Sandbox run not found");
-    }
+    const { sandboxRun } = access;
 
     // Validate status transition if status is being changed
     if (args.status !== undefined && args.status !== sandboxRun.status) {
@@ -173,27 +171,37 @@ export const update = mutation({
 /**
  * Get a sandbox run by ID
  * @param sandboxRunId - The ID of the sandbox run
- * @returns The sandbox run or null if not found
+ * @returns The sandbox run or null if not found or access denied
  */
 export const get = query({
   args: {
     sandboxRunId: v.id("sandboxRuns"),
   },
   handler: async (ctx, args): Promise<Doc<"sandboxRuns"> | null> => {
-    return await ctx.db.get(args.sandboxRunId);
+    const access = await getSandboxRunAccess(ctx, args.sandboxRunId);
+    if (access === null) {
+      return null;
+    }
+    return access.sandboxRun;
   },
 });
 
 /**
  * List all sandbox runs for a workspace
  * @param workspaceId - The workspace ID
- * @returns Array of sandbox runs
+ * @returns Array of sandbox runs, or empty array if not authorized
  */
 export const listByWorkspace = query({
   args: {
     workspaceId: v.id("workspaces"),
   },
   handler: async (ctx, args): Promise<Doc<"sandboxRuns">[]> => {
+    // Check workspace membership
+    const membership = await getUserMembership(ctx, args.workspaceId);
+    if (membership === null) {
+      return [];
+    }
+
     return await ctx.db
       .query("sandboxRuns")
       .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
@@ -204,53 +212,35 @@ export const listByWorkspace = query({
 /**
  * List all sandbox runs for a thread
  * @param threadId - The thread ID
- * @returns Array of sandbox runs
+ * @returns Array of sandbox runs the user has access to
  */
 export const listByThread = query({
   args: {
     threadId: v.string(),
   },
   handler: async (ctx, args): Promise<Doc<"sandboxRuns">[]> => {
-    return await ctx.db
+    // Check user is authenticated
+    const identity = await ctx.auth.getUserIdentity();
+    if (identity === null) {
+      return [];
+    }
+
+    // Get all sandbox runs for this thread
+    const runs = await ctx.db
       .query("sandboxRuns")
       .withIndex("by_thread", (q) => q.eq("threadId", args.threadId))
       .collect();
-  },
-});
 
-/**
- * Find idle running sandboxes that should be cleaned up
- * Returns sandboxes where:
- * - status is 'running'
- * - sandboxId exists (sandbox was actually created)
- * - (now - lastActivityAt) > maxIdleMs
- *
- * @param maxIdleMs - Maximum idle time in milliseconds
- * @returns Array of idle sandbox runs
- */
-export const findIdle = query({
-  args: {
-    maxIdleMs: v.number(),
-  },
-  handler: async (ctx, args): Promise<Doc<"sandboxRuns">[]> => {
-    const now = Date.now();
-    const cutoffTime = now - args.maxIdleMs;
-
-    // Get all running sandboxes
-    const runningSandboxes = await ctx.db
-      .query("sandboxRuns")
-      .withIndex("by_status", (q) => q.eq("status", "running"))
+    // Get user's workspace memberships to filter accessible runs
+    const memberships = await ctx.db
+      .query("workspaceMembers")
+      .withIndex("by_user", (q) => q.eq("userId", identity.subject))
       .collect();
 
-    // Filter to idle sandboxes with a valid sandboxId
-    return runningSandboxes.filter((run) => {
-      // Must have a sandboxId (sandbox was actually created)
-      if (run.sandboxId === undefined) {
-        return false;
-      }
-      // Must be idle longer than maxIdleMs
-      return run.lastActivityAt < cutoffTime;
-    });
+    const memberWorkspaceIds = new Set(memberships.map((m) => m.workspaceId.toString()));
+
+    // Filter runs to only those in workspaces the user belongs to
+    return runs.filter((run) => memberWorkspaceIds.has(run.workspaceId.toString()));
   },
 });
 
