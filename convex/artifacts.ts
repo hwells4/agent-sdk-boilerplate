@@ -13,6 +13,7 @@ import {
   validateTitle,
   validateThreadId,
 } from "./lib/validators";
+import { emptyPaginationResult } from "./lib/pagination";
 
 /**
  * Artifact mutations and queries
@@ -206,7 +207,7 @@ export const listByRun = query({
     // Check workspace membership via sandbox run
     const access = await getSandboxRunAccess(ctx, args.sandboxRunId);
     if (access === null) {
-      return { page: [], continueCursor: "", isDone: true };
+      return emptyPaginationResult<Doc<"artifacts">>();
     }
 
     // Use built-in pagination - only loads requested page size
@@ -274,7 +275,7 @@ export const listPending = query({
     // Check workspace membership
     const membership = await getUserMembership(ctx, args.workspaceId);
     if (membership === null) {
-      return { page: [], continueCursor: "", isDone: true };
+      return emptyPaginationResult<Doc<"artifacts">>();
     }
 
     // Use composite index for O(1) query - no post-fetch filtering needed

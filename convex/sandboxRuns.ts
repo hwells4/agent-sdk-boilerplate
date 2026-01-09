@@ -14,6 +14,7 @@ import {
   validateThreadId,
   validateError,
 } from "./lib/validators";
+import { emptyPaginationResult } from "./lib/pagination";
 
 // ============================================================================
 // Internal Helper Functions (not exported)
@@ -248,7 +249,7 @@ export const listByWorkspace = query({
     // Check workspace membership
     const membership = await getUserMembership(ctx, args.workspaceId);
     if (membership === null) {
-      return { page: [], continueCursor: "", isDone: true };
+      return emptyPaginationResult<Doc<"sandboxRuns">>();
     }
 
     // Use built-in pagination - only loads requested page size
