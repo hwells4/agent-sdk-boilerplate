@@ -4,6 +4,7 @@ import { v } from "convex/values";
 import { action } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { Id } from "../_generated/dataModel";
+import { IDLE_TIMEOUT_MS } from "../lib/constants";
 import { Sandbox } from "@e2b/code-interpreter";
 
 /**
@@ -52,8 +53,8 @@ export const startSandboxRun = action({
       throw new Error("E2B_TEMPLATE_ID environment variable is not set");
     }
 
-    const maxDurationMs = args.maxDurationMs ?? 120000; // Default 2 minutes
-    const idleTimeoutMs = 15 * 60 * 1000; // 15 minutes idle timeout
+    const maxDurationMs = args.maxDurationMs ?? 2 * 60 * 1000; // Default 2 minutes
+    const idleTimeoutMs = IDLE_TIMEOUT_MS;
 
     // Step 1: Create sandboxRun record with status 'booting'
     const sandboxRunId = await ctx.runMutation(internal.sandboxRuns.internalCreate, {
