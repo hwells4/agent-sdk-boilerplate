@@ -76,6 +76,14 @@ export const update = mutation({
 
 /**
  * Remove (delete) a workspace
+ * Performs cascade deletion in the correct order to prevent orphaned records:
+ * 1. artifacts (for each sandboxRun)
+ * 2. sandboxRuns
+ * 3. workspaceMembers
+ * 4. workspace
+ *
+ * Storage blobs are left for Convex GC (no manual deletion needed)
+ *
  * @param workspaceId - The ID of the workspace to delete
  */
 export const remove = mutation({
@@ -98,7 +106,30 @@ export const remove = mutation({
       throw new Error("Unauthorized: only the workspace owner can delete it");
     }
 
-    // Delete all workspace members first
+    // 1. Get all sandboxRuns for this workspace
+    const sandboxRuns = await ctx.db
+      .query("sandboxRuns")
+      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
+      .collect();
+
+    // 2. Delete all artifacts for each sandboxRun, then delete the sandboxRun
+    for (const run of sandboxRuns) {
+      // Get all artifacts for this run
+      const artifacts = await ctx.db
+        .query("artifacts")
+        .withIndex("by_run", (q) => q.eq("sandboxRunId", run._id))
+        .collect();
+
+      // Delete all artifacts for this run
+      for (const artifact of artifacts) {
+        await ctx.db.delete(artifact._id);
+      }
+
+      // Delete the sandboxRun
+      await ctx.db.delete(run._id);
+    }
+
+    // 3. Delete all workspace members
     const members = await ctx.db
       .query("workspaceMembers")
       .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
@@ -108,7 +139,7 @@ export const remove = mutation({
       await ctx.db.delete(member._id);
     }
 
-    // Delete the workspace
+    // 4. Delete the workspace
     await ctx.db.delete(args.workspaceId);
   },
 });
