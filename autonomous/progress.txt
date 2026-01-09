@@ -235,3 +235,16 @@
 - Files changed: convex/lib/validators.ts (new)
 - Convex folder typechecks cleanly via `cd convex && npx tsc --noEmit`
 ---
+
+## 2026-01-08 - US-015
+- Added missing schema indexes for efficient authorization queries
+- New indexes:
+  - workspaces.by_owner on [ownerId] - enables fast owner lookups
+  - workspaceMembers.by_workspace_user on [workspaceId, userId] - O(1) membership checks
+  - sandboxRuns.by_status_activity on [status, lastActivityAt] - optimized idle detection
+- All existing indexes preserved (by_user, by_workspace, by_thread, by_status, by_run, by_review_state)
+- Updated _generated/api.d.ts via convex dev --typecheck=enable --once
+- Files changed: convex/schema.ts, convex/_generated/api.d.ts
+- Convex folder typechecks cleanly; convex dev --typecheck=enable --once passes
+- These indexes enable the upcoming US-014 shared authorization module
+---

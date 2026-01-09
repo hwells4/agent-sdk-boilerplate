@@ -241,7 +241,7 @@
         "npx convex dev --typecheck --once passes"
       ],
       "priority": 15,
-      "passes": false,
+      "passes": true,
       "notes": "Phase 1 Foundation - Add composite indexes for efficient queries. MUST complete before US-014."
     },
     {
