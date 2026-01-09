@@ -281,3 +281,19 @@
 - Files changed: convex/sandboxRuns.ts
 - Convex folder typechecks cleanly via `cd convex && npx tsc --noEmit`
 ---
+
+## 2026-01-08 - US-017
+- Added authorization to artifacts mutations and queries
+- Changes:
+  - artifacts.create: Now uses getSandboxRunAccess, throws if null
+  - artifacts.updateReviewState: Now uses getArtifactAccess, throws if null
+  - artifacts.updateReviewState: Added role check - only owner/admin can review
+  - artifacts.get: Now uses getArtifactAccess, returns null if unauthorized
+  - artifacts.listByRun: Now uses getSandboxRunAccess, returns [] if null
+  - artifacts.listPending: Now REQUIRES workspaceId argument
+  - artifacts.listPending: Filters to workspace only via getUserMembership
+  - Added internalCreate mutation for actions (bypasses auth)
+- Imported getUserMembership, getSandboxRunAccess, getArtifactAccess from ./lib/authorization
+- Files changed: convex/artifacts.ts
+- Convex folder typechecks cleanly via `cd convex && npx tsc --noEmit`
+---
