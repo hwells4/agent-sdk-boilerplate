@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { getUserMembership } from "./lib/authorization";
+import { validateName } from "./lib/validators";
 
 /**
  * Workspace CRUD operations
@@ -24,6 +25,9 @@ export const create = mutation({
     if (identity === null) {
       throw new Error("Unauthenticated: must be logged in to create a workspace");
     }
+
+    // Validate input lengths
+    validateName(args.name);
 
     const workspaceId = await ctx.db.insert("workspaces", {
       name: args.name,
@@ -68,6 +72,9 @@ export const update = mutation({
     if (workspace.ownerId !== identity.subject) {
       throw new Error("Unauthorized: only the workspace owner can update it");
     }
+
+    // Validate input lengths
+    validateName(args.name);
 
     await ctx.db.patch(args.workspaceId, {
       name: args.name,

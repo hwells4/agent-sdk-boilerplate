@@ -1,9 +1,78 @@
 import { Infer, v } from "convex/values";
+import {
+  MAX_NAME_LENGTH,
+  MAX_TITLE_LENGTH,
+  MAX_THREAD_ID_LENGTH,
+  MAX_ERROR_MESSAGE_LENGTH,
+  MAX_ERROR_CODE_LENGTH,
+  MAX_ERROR_DETAILS_LENGTH,
+} from "./constants";
 
 /**
  * Shared validators for Convex schema and mutations
  * Single source of truth for enum-like values
  */
+
+// ============================================================================
+// String Length Validation
+// ============================================================================
+
+/**
+ * Validate string length and throw a clear error if exceeded
+ * @param value - The string to validate
+ * @param fieldName - Human-readable field name for error message
+ * @param maxLength - Maximum allowed length
+ * @throws Error with clear message if length exceeded
+ */
+export function validateStringLength(
+  value: string,
+  fieldName: string,
+  maxLength: number
+): void {
+  if (value.length > maxLength) {
+    throw new Error(
+      `${fieldName} exceeds maximum length of ${maxLength} characters (got ${value.length})`
+    );
+  }
+}
+
+/**
+ * Validate workspace/entity name length
+ */
+export function validateName(value: string): void {
+  validateStringLength(value, "Name", MAX_NAME_LENGTH);
+}
+
+/**
+ * Validate artifact title length
+ */
+export function validateTitle(value: string): void {
+  validateStringLength(value, "Title", MAX_TITLE_LENGTH);
+}
+
+/**
+ * Validate thread ID length
+ */
+export function validateThreadId(value: string): void {
+  validateStringLength(value, "Thread ID", MAX_THREAD_ID_LENGTH);
+}
+
+/**
+ * Validate error object field lengths
+ */
+export function validateError(error: {
+  message: string;
+  code?: string;
+  details?: string;
+}): void {
+  validateStringLength(error.message, "Error message", MAX_ERROR_MESSAGE_LENGTH);
+  if (error.code !== undefined) {
+    validateStringLength(error.code, "Error code", MAX_ERROR_CODE_LENGTH);
+  }
+  if (error.details !== undefined) {
+    validateStringLength(error.details, "Error details", MAX_ERROR_DETAILS_LENGTH);
+  }
+}
 
 /**
  * Sandbox run status validator

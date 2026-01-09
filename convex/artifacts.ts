@@ -7,7 +7,12 @@ import {
   getSandboxRunAccess,
   getArtifactAccess,
 } from "./lib/authorization";
-import { artifactTypeValidator, reviewStateValidator } from "./lib/validators";
+import {
+  artifactTypeValidator,
+  reviewStateValidator,
+  validateTitle,
+  validateThreadId,
+} from "./lib/validators";
 
 /**
  * Artifact mutations and queries
@@ -48,6 +53,10 @@ export const create = mutation({
       throw new Error("Unauthorized: not a member of this workspace or sandbox run not found");
     }
 
+    // Validate input lengths
+    validateTitle(args.title);
+    validateThreadId(args.threadId);
+
     const now = Date.now();
     const artifactId = await ctx.db.insert("artifacts", {
       sandboxRunId: args.sandboxRunId,
@@ -86,6 +95,10 @@ export const internalCreate = internalMutation({
     previewText: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<Id<"artifacts">> => {
+    // Validate input lengths first (fail fast before DB queries)
+    validateTitle(args.title);
+    validateThreadId(args.threadId);
+
     // Validate sandbox run exists (FK check)
     const sandboxRun = await ctx.db.get(args.sandboxRunId);
     if (sandboxRun === null) {

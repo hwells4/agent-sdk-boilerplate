@@ -9,7 +9,11 @@ import {
   getTransitionError,
 } from "./lib/stateMachine";
 import { getUserMembership, getSandboxRunAccess } from "./lib/authorization";
-import { sandboxStatusValidator } from "./lib/validators";
+import {
+  sandboxStatusValidator,
+  validateThreadId,
+  validateError,
+} from "./lib/validators";
 
 // ============================================================================
 // Internal Helper Functions (not exported)
@@ -128,6 +132,9 @@ export const create = mutation({
       throw new Error("Unauthenticated: must be logged in to create a sandbox run");
     }
 
+    // Validate input lengths first (fail fast before DB queries)
+    validateThreadId(args.threadId);
+
     // Verify workspace exists
     const workspace = await ctx.db.get(args.workspaceId);
     if (workspace === null) {
@@ -183,6 +190,11 @@ export const update = mutation({
     ),
   },
   handler: async (ctx, args): Promise<void> => {
+    // Validate input lengths first (fail fast before DB queries)
+    if (args.error !== undefined) {
+      validateError(args.error);
+    }
+
     // Authorization check using shared helper
     // Note: performSandboxRunUpdate will re-fetch the document to prevent race conditions
     const access = await getSandboxRunAccess(ctx, args.sandboxRunId);
@@ -305,6 +317,9 @@ export const internalCreate = internalMutation({
     idleTimeoutMs: v.optional(v.number()),
   },
   handler: async (ctx, args): Promise<Id<"sandboxRuns">> => {
+    // Validate input lengths first (fail fast before DB queries)
+    validateThreadId(args.threadId);
+
     // Validate workspace exists (FK check)
     const workspace = await ctx.db.get(args.workspaceId);
     if (workspace === null) {
@@ -357,6 +372,11 @@ export const internalUpdate = internalMutation({
     skipTerminalStates: v.optional(v.boolean()),
   },
   handler: async (ctx, args): Promise<{ updated: boolean; skipped: boolean; reason?: string }> => {
+    // Validate input lengths first (fail fast before DB queries)
+    if (args.error !== undefined) {
+      validateError(args.error);
+    }
+
     // Use shared helper for update logic (handles existence check and re-fetches current state)
     return await performSandboxRunUpdate(
       ctx,
