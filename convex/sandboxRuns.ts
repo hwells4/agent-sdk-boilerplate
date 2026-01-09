@@ -7,6 +7,7 @@ import {
   getTransitionError,
 } from "./lib/stateMachine";
 import { getUserMembership, getSandboxRunAccess } from "./lib/authorization";
+import { sandboxStatusValidator } from "./lib/validators";
 
 // ============================================================================
 // Internal Helper Functions (not exported)
@@ -89,13 +90,7 @@ export const create = mutation({
   args: {
     threadId: v.string(),
     workspaceId: v.id("workspaces"),
-    status: v.union(
-      v.literal("booting"),
-      v.literal("running"),
-      v.literal("succeeded"),
-      v.literal("failed"),
-      v.literal("canceled")
-    ),
+    status: sandboxStatusValidator,
     maxDurationMs: v.optional(v.number()),
     idleTimeoutMs: v.optional(v.number()),
   },
@@ -152,15 +147,7 @@ export const update = mutation({
   args: {
     sandboxRunId: v.id("sandboxRuns"),
     sandboxId: v.optional(v.string()),
-    status: v.optional(
-      v.union(
-        v.literal("booting"),
-        v.literal("running"),
-        v.literal("succeeded"),
-        v.literal("failed"),
-        v.literal("canceled")
-      )
-    ),
+    status: v.optional(sandboxStatusValidator),
     finishedAt: v.optional(v.number()),
     lastActivityAt: v.optional(v.number()),
     e2bCost: v.optional(v.number()),
@@ -319,15 +306,7 @@ export const internalUpdate = internalMutation({
   args: {
     sandboxRunId: v.id("sandboxRuns"),
     sandboxId: v.optional(v.string()),
-    status: v.optional(
-      v.union(
-        v.literal("booting"),
-        v.literal("running"),
-        v.literal("succeeded"),
-        v.literal("failed"),
-        v.literal("canceled")
-      )
-    ),
+    status: v.optional(sandboxStatusValidator),
     finishedAt: v.optional(v.number()),
     lastActivityAt: v.optional(v.number()),
     e2bCost: v.optional(v.number()),

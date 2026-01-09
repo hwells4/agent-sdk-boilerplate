@@ -1,5 +1,11 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import {
+  sandboxStatusValidator,
+  artifactTypeValidator,
+  reviewStateValidator,
+  memberRoleValidator,
+} from "./lib/validators";
 
 /**
  * Schema for Claude Agent SDK Experiments with Convex backend
@@ -22,7 +28,7 @@ export default defineSchema({
   workspaceMembers: defineTable({
     workspaceId: v.id("workspaces"),
     userId: v.string(),
-    role: v.union(v.literal("owner"), v.literal("admin"), v.literal("member")),
+    role: memberRoleValidator,
     joinedAt: v.number(),
   })
     .index("by_user", ["userId"])
@@ -35,13 +41,7 @@ export default defineSchema({
     workspaceId: v.id("workspaces"),
     createdBy: v.string(),
     sandboxId: v.optional(v.string()),
-    status: v.union(
-      v.literal("booting"),
-      v.literal("running"),
-      v.literal("succeeded"),
-      v.literal("failed"),
-      v.literal("canceled")
-    ),
+    status: sandboxStatusValidator,
     startedAt: v.number(),
     finishedAt: v.optional(v.number()),
     lastActivityAt: v.number(),
@@ -65,24 +65,14 @@ export default defineSchema({
   artifacts: defineTable({
     sandboxRunId: v.id("sandboxRuns"),
     threadId: v.string(),
-    type: v.union(
-      v.literal("file"),
-      v.literal("image"),
-      v.literal("code"),
-      v.literal("log"),
-      v.literal("other")
-    ),
+    type: artifactTypeValidator,
     title: v.string(),
     storageId: v.id("_storage"),
     contentType: v.string(),
     size: v.number(),
     sandboxPath: v.optional(v.string()),
     previewText: v.optional(v.string()),
-    reviewState: v.union(
-      v.literal("pending"),
-      v.literal("approved"),
-      v.literal("rejected")
-    ),
+    reviewState: reviewStateValidator,
     reviewedBy: v.optional(v.string()),
     reviewedAt: v.optional(v.number()),
     createdAt: v.number(),

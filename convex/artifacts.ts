@@ -6,6 +6,7 @@ import {
   getSandboxRunAccess,
   getArtifactAccess,
 } from "./lib/authorization";
+import { artifactTypeValidator, reviewStateValidator } from "./lib/validators";
 
 /**
  * Artifact mutations and queries
@@ -31,13 +32,7 @@ export const create = mutation({
   args: {
     sandboxRunId: v.id("sandboxRuns"),
     threadId: v.string(),
-    type: v.union(
-      v.literal("file"),
-      v.literal("image"),
-      v.literal("code"),
-      v.literal("log"),
-      v.literal("other")
-    ),
+    type: artifactTypeValidator,
     title: v.string(),
     storageId: v.id("_storage"),
     contentType: v.string(),
@@ -79,13 +74,7 @@ export const internalCreate = internalMutation({
   args: {
     sandboxRunId: v.id("sandboxRuns"),
     threadId: v.string(),
-    type: v.union(
-      v.literal("file"),
-      v.literal("image"),
-      v.literal("code"),
-      v.literal("log"),
-      v.literal("other")
-    ),
+    type: artifactTypeValidator,
     title: v.string(),
     storageId: v.id("_storage"),
     contentType: v.string(),
@@ -122,11 +111,7 @@ export const internalCreate = internalMutation({
 export const updateReviewState = mutation({
   args: {
     artifactId: v.id("artifacts"),
-    reviewState: v.union(
-      v.literal("pending"),
-      v.literal("approved"),
-      v.literal("rejected")
-    ),
+    reviewState: reviewStateValidator,
   },
   handler: async (ctx, args): Promise<void> => {
     // Check workspace membership via artifact
