@@ -51,6 +51,7 @@ export const create = mutation({
     const now = Date.now();
     const artifactId = await ctx.db.insert("artifacts", {
       sandboxRunId: args.sandboxRunId,
+      workspaceId: access.sandboxRun.workspaceId, // Denormalized for efficient queries
       threadId: args.threadId,
       type: args.type,
       title: args.title,
@@ -74,6 +75,7 @@ export const create = mutation({
 export const internalCreate = internalMutation({
   args: {
     sandboxRunId: v.id("sandboxRuns"),
+    workspaceId: v.id("workspaces"),
     threadId: v.string(),
     type: artifactTypeValidator,
     title: v.string(),
@@ -87,6 +89,7 @@ export const internalCreate = internalMutation({
     const now = Date.now();
     const artifactId = await ctx.db.insert("artifacts", {
       sandboxRunId: args.sandboxRunId,
+      workspaceId: args.workspaceId,
       threadId: args.threadId,
       type: args.type,
       title: args.title,
@@ -184,82 +187,71 @@ export const listByRun = query({
 });
 
 /**
- * Custom pagination result for listPending
- * Uses different shape because we need to filter by workspace after fetching
+ * Backfill workspaceId for existing artifacts that don't have it set.
+ * Run this after schema migration to populate denormalized workspaceId field.
+ * Processes in batches to avoid timeouts.
+ *
+ * @param batchSize - Number of artifacts to process per call (default: 100)
+ * @returns Number of artifacts updated, or 0 if backfill is complete
  */
-type PendingArtifactsResult = {
-  page: Doc<"artifacts">[];
-  continueCursor: string;
-  isDone: boolean;
-};
+export const backfillWorkspaceId = internalMutation({
+  args: {
+    batchSize: v.optional(v.number()),
+  },
+  handler: async (ctx, args): Promise<number> => {
+    const batchSize = args.batchSize ?? 100;
+
+    // Find artifacts without workspaceId (using type assertion since field is now required)
+    const artifacts = await ctx.db
+      .query("artifacts")
+      .take(batchSize);
+
+    let updated = 0;
+    for (const artifact of artifacts) {
+      // Check if workspaceId is missing (pre-migration artifacts)
+      // TypeScript thinks it's always present, but old data won't have it
+      if ((artifact as { workspaceId?: unknown }).workspaceId === undefined) {
+        const sandboxRun = await ctx.db.get(artifact.sandboxRunId);
+        if (sandboxRun) {
+          await ctx.db.patch(artifact._id, {
+            workspaceId: sandboxRun.workspaceId,
+          });
+          updated++;
+        }
+      }
+    }
+
+    return updated;
+  },
+});
 
 /**
  * List artifacts with pending review state for a workspace with pagination
- * Uses iterative pagination to avoid loading all records into memory.
- *
- * NOTE: This query requires post-fetch filtering by workspace because artifacts
- * don't have a direct workspaceId field. Full O(page_size) efficiency requires
- * denormalizing workspaceId onto artifacts (tracked in separate story).
- * Current implementation loads pages iteratively until enough results found.
+ * Uses composite index by_workspace_review for O(1) query complexity.
  *
  * @param workspaceId - The workspace to filter artifacts by
  * @param paginationOpts - Pagination options (numItems, cursor)
- * @returns Paginated result with pending artifacts for this workspace
+ * @returns PaginationResult with pending artifacts for this workspace
  */
 export const listPending = query({
   args: {
     workspaceId: v.id("workspaces"),
     paginationOpts: paginationOptsValidator,
   },
-  handler: async (ctx, args): Promise<PendingArtifactsResult> => {
+  handler: async (ctx, args): Promise<PaginationResult<Doc<"artifacts">>> => {
     // Check workspace membership
     const membership = await getUserMembership(ctx, args.workspaceId);
     if (membership === null) {
       return { page: [], continueCursor: "", isDone: true };
     }
 
-    const targetCount = args.paginationOpts.numItems;
-    const results: Doc<"artifacts">[] = [];
-    let currentCursor = args.paginationOpts.cursor;
-    let isDone = false;
-    let lastCursor = "";
-
-    // Fetch pages until we have enough workspace-filtered results or run out
-    // Use larger internal page size to reduce round-trips
-    const internalPageSize = Math.max(targetCount * 2, 50);
-    const maxIterations = 10; // Safety limit to prevent infinite loops
-
-    for (let i = 0; i < maxIterations && results.length < targetCount + 1 && !isDone; i++) {
-      const pageResult = await ctx.db
-        .query("artifacts")
-        .withIndex("by_review_state", (q) => q.eq("reviewState", "pending"))
-        .order("desc")
-        .paginate({ numItems: internalPageSize, cursor: currentCursor });
-
-      // Filter this page by workspace
-      for (const artifact of pageResult.page) {
-        const sandboxRun = await ctx.db.get(artifact.sandboxRunId);
-        if (sandboxRun && sandboxRun.workspaceId === args.workspaceId) {
-          results.push(artifact);
-          // Track the last matching artifact's ID for cursor
-          lastCursor = artifact._id;
-          if (results.length > targetCount) break;
-        }
-      }
-
-      isDone = pageResult.isDone;
-      currentCursor = pageResult.continueCursor;
-    }
-
-    // Determine final pagination state
-    const hasMore = results.length > targetCount;
-    const page = hasMore ? results.slice(0, targetCount) : results;
-    const finalCursor = hasMore && page.length > 0 ? page[page.length - 1]._id : lastCursor;
-
-    return {
-      page,
-      continueCursor: finalCursor,
-      isDone: isDone && !hasMore,
-    };
+    // Use composite index for O(1) query - no post-fetch filtering needed
+    return await ctx.db
+      .query("artifacts")
+      .withIndex("by_workspace_review", (q) =>
+        q.eq("workspaceId", args.workspaceId).eq("reviewState", "pending")
+      )
+      .order("desc")
+      .paginate(args.paginationOpts);
   },
 });

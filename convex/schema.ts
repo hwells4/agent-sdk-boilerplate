@@ -64,6 +64,7 @@ export default defineSchema({
   // Artifacts produced by sandbox runs
   artifacts: defineTable({
     sandboxRunId: v.id("sandboxRuns"),
+    workspaceId: v.id("workspaces"), // Denormalized for efficient workspace+review queries
     threadId: v.string(),
     type: artifactTypeValidator,
     title: v.string(),
@@ -79,5 +80,6 @@ export default defineSchema({
   })
     .index("by_run", ["sandboxRunId"])
     .index("by_thread", ["threadId"])
-    .index("by_review_state", ["reviewState"]),
+    .index("by_review_state", ["reviewState"])
+    .index("by_workspace_review", ["workspaceId", "reviewState"]),
 });
