@@ -5,7 +5,7 @@ Verify: (none)
 ## Codebase Patterns
 - Convex pagination: Use `paginationOptsValidator` from `convex/server` and `.paginate(args.paginationOpts)` instead of `.collect()` with manual slicing
 - Return type for paginated queries: `PaginationResult<Doc<"tableName">>` with `{page, continueCursor, isDone}`
-- Empty result for unauthorized access: `{ page: [], continueCursor: "", isDone: true }`
+- Empty pagination result: Use `emptyPaginationResult<Doc<"tableName">>()` from `./lib/pagination` instead of inline object literal
 - Denormalization: For efficient queries that filter on parent entity fields, denormalize the field onto the child table
 - Composite indexes: Use `.index("name", [field1, field2])` for queries filtering on multiple fields
 - Race condition prevention: Re-fetch document state immediately before update, not at authorization check time
@@ -157,3 +157,13 @@ Verify: (none)
 - Uses skipTerminalStates to prevent race condition errors when sandbox completes between query and update
 ---
 
+
+## 2026-01-09 - claude-agent-sdk-experiments-4x9
+- Extracted pagination helper for DRY empty result pattern
+- Files changed:
+  - `convex/lib/pagination.ts`: New file with `emptyPaginationResult<T>()` generic helper
+  - `convex/sandboxRuns.ts`: Use helper in `listByWorkspace` query
+  - `convex/artifacts.ts`: Use helper in `listByRun` and `listPending` queries
+- Pattern: Use `emptyPaginationResult<Doc<"tableName">>()` instead of inline `{ page: [], continueCursor: "", isDone: true }`
+- Benefits: Single source of truth, clear intent, type-safe, consistent behavior
+---
