@@ -78,6 +78,14 @@ export const addMember = mutation({
       throw new Error("Unauthorized: only owner or admin can add members");
     }
 
+    // Restrict admin privilege escalation: only owners can add admins
+    if (args.role === "admin") {
+      const currentUserMembership = await getUserMembership(ctx, args.workspaceId);
+      if (currentUserMembership?.role !== "owner") {
+        throw new Error("Unauthorized: only owners can add admin members");
+      }
+    }
+
     // Check if user is already a member
     const existingMembership = await ctx.db
       .query("workspaceMembers")
