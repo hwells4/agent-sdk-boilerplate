@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { paginationOptsValidator, PaginationResult } from "convex/server";
 import { mutation, query, internalMutation } from "./_generated/server";
 import { Id, Doc } from "./_generated/dataModel";
 import {
@@ -155,128 +156,110 @@ export const get = query({
 });
 
 /**
- * Pagination result type for artifacts
- */
-type PaginatedArtifacts = {
-  items: Doc<"artifacts">[];
-  cursor: string | null;
-};
-
-/**
  * List artifacts for a sandbox run with pagination
- * Returns empty result if user doesn't have access
+ * Uses Convex's built-in .paginate() for O(page_size) memory usage
  * @param sandboxRunId - The sandbox run ID
- * @param cursor - Optional cursor to continue from (document ID from previous page)
- * @param limit - Optional limit (default 50)
- * @returns Paginated result with items and cursor for next page
+ * @param paginationOpts - Pagination options (numItems, cursor)
+ * @returns PaginationResult with page, continueCursor, and isDone
  */
 export const listByRun = query({
   args: {
     sandboxRunId: v.id("sandboxRuns"),
-    cursor: v.optional(v.string()),
-    limit: v.optional(v.number()),
+    paginationOpts: paginationOptsValidator,
   },
-  handler: async (ctx, args): Promise<PaginatedArtifacts> => {
+  handler: async (ctx, args): Promise<PaginationResult<Doc<"artifacts">>> => {
     // Check workspace membership via sandbox run
     const access = await getSandboxRunAccess(ctx, args.sandboxRunId);
     if (access === null) {
-      return { items: [], cursor: null };
+      return { page: [], continueCursor: "", isDone: true };
     }
 
-    const limit = args.limit ?? 50;
-
-    // Build query with descending order for consistent pagination
-    const query = ctx.db
+    // Use built-in pagination - only loads requested page size
+    return await ctx.db
       .query("artifacts")
       .withIndex("by_run", (q) => q.eq("sandboxRunId", args.sandboxRunId))
-      .order("desc");
-
-    // Collect all results to enable cursor-based filtering
-    const allResults = await query.collect();
-
-    // If we have a cursor, find its position and start after it
-    let startIndex = 0;
-    if (args.cursor) {
-      const cursorIndex = allResults.findIndex((r) => r._id === args.cursor);
-      if (cursorIndex >= 0) {
-        startIndex = cursorIndex + 1;
-      }
-    }
-
-    // Take limit + 1 to detect if there are more items
-    const slice = allResults.slice(startIndex, startIndex + limit + 1);
-
-    // Determine if there are more items
-    const hasMore = slice.length > limit;
-    const items = hasMore ? slice.slice(0, limit) : slice;
-    const nextCursor = hasMore && items.length > 0 ? items[items.length - 1]._id : null;
-
-    return {
-      items,
-      cursor: nextCursor,
-    };
+      .order("desc")
+      .paginate(args.paginationOpts);
   },
 });
 
 /**
+ * Custom pagination result for listPending
+ * Uses different shape because we need to filter by workspace after fetching
+ */
+type PendingArtifactsResult = {
+  page: Doc<"artifacts">[];
+  continueCursor: string;
+  isDone: boolean;
+};
+
+/**
  * List artifacts with pending review state for a workspace with pagination
- * Requires workspaceId to prevent multi-tenant data leakage
+ * Uses iterative pagination to avoid loading all records into memory.
+ *
+ * NOTE: This query requires post-fetch filtering by workspace because artifacts
+ * don't have a direct workspaceId field. Full O(page_size) efficiency requires
+ * denormalizing workspaceId onto artifacts (tracked in separate story).
+ * Current implementation loads pages iteratively until enough results found.
+ *
  * @param workspaceId - The workspace to filter artifacts by
- * @param cursor - Optional cursor to continue from (document ID from previous page)
- * @param limit - Optional limit (default 50)
- * @returns Paginated result with pending artifacts and cursor for next page
+ * @param paginationOpts - Pagination options (numItems, cursor)
+ * @returns Paginated result with pending artifacts for this workspace
  */
 export const listPending = query({
   args: {
     workspaceId: v.id("workspaces"),
-    cursor: v.optional(v.string()),
-    limit: v.optional(v.number()),
+    paginationOpts: paginationOptsValidator,
   },
-  handler: async (ctx, args): Promise<PaginatedArtifacts> => {
+  handler: async (ctx, args): Promise<PendingArtifactsResult> => {
     // Check workspace membership
     const membership = await getUserMembership(ctx, args.workspaceId);
     if (membership === null) {
-      return { items: [], cursor: null };
+      return { page: [], continueCursor: "", isDone: true };
     }
 
-    const limit = args.limit ?? 50;
+    const targetCount = args.paginationOpts.numItems;
+    const results: Doc<"artifacts">[] = [];
+    let currentCursor = args.paginationOpts.cursor;
+    let isDone = false;
+    let lastCursor = "";
 
-    // Get all pending artifacts with descending order
-    const allPending = await ctx.db
-      .query("artifacts")
-      .withIndex("by_review_state", (q) => q.eq("reviewState", "pending"))
-      .order("desc")
-      .collect();
+    // Fetch pages until we have enough workspace-filtered results or run out
+    // Use larger internal page size to reduce round-trips
+    const internalPageSize = Math.max(targetCount * 2, 50);
+    const maxIterations = 10; // Safety limit to prevent infinite loops
 
-    // Filter to only artifacts belonging to this workspace's sandbox runs
-    const workspaceArtifacts: Doc<"artifacts">[] = [];
-    for (const artifact of allPending) {
-      const sandboxRun = await ctx.db.get(artifact.sandboxRunId);
-      if (sandboxRun && sandboxRun.workspaceId === args.workspaceId) {
-        workspaceArtifacts.push(artifact);
+    for (let i = 0; i < maxIterations && results.length < targetCount + 1 && !isDone; i++) {
+      const pageResult = await ctx.db
+        .query("artifacts")
+        .withIndex("by_review_state", (q) => q.eq("reviewState", "pending"))
+        .order("desc")
+        .paginate({ numItems: internalPageSize, cursor: currentCursor });
+
+      // Filter this page by workspace
+      for (const artifact of pageResult.page) {
+        const sandboxRun = await ctx.db.get(artifact.sandboxRunId);
+        if (sandboxRun && sandboxRun.workspaceId === args.workspaceId) {
+          results.push(artifact);
+          // Track the last matching artifact's ID for cursor
+          lastCursor = artifact._id;
+          if (results.length > targetCount) break;
+        }
       }
+
+      isDone = pageResult.isDone;
+      currentCursor = pageResult.continueCursor;
     }
 
-    // If we have a cursor, find its position and start after it
-    let startIndex = 0;
-    if (args.cursor) {
-      const cursorIndex = workspaceArtifacts.findIndex((r) => r._id === args.cursor);
-      if (cursorIndex >= 0) {
-        startIndex = cursorIndex + 1;
-      }
-    }
-
-    // Take limit + 1 to detect if there are more items
-    const slice = workspaceArtifacts.slice(startIndex, startIndex + limit + 1);
-
-    // Determine if there are more items
-    const hasMore = slice.length > limit;
-    const items = hasMore ? slice.slice(0, limit) : slice;
-    const nextCursor = hasMore && items.length > 0 ? items[items.length - 1]._id : null;
+    // Determine final pagination state
+    const hasMore = results.length > targetCount;
+    const page = hasMore ? results.slice(0, targetCount) : results;
+    const finalCursor = hasMore && page.length > 0 ? page[page.length - 1]._id : lastCursor;
 
     return {
-      items,
-      cursor: nextCursor,
+      page,
+      continueCursor: finalCursor,
+      isDone: isDone && !hasMore,
     };
   },
 });

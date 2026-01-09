@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { paginationOptsValidator, PaginationResult } from "convex/server";
 import { mutation, query, internalMutation, internalQuery, MutationCtx } from "./_generated/server";
 import { Id, Doc } from "./_generated/dataModel";
 import {
@@ -197,66 +198,30 @@ export const get = query({
 });
 
 /**
- * Pagination result type for sandbox runs
- */
-type PaginatedSandboxRuns = {
-  items: Doc<"sandboxRuns">[];
-  cursor: string | null;
-};
-
-/**
  * List sandbox runs for a workspace with pagination
+ * Uses Convex's built-in .paginate() for O(page_size) memory usage
  * @param workspaceId - The workspace ID
- * @param cursor - Optional cursor to continue from (document ID from previous page)
- * @param limit - Optional limit (default 50)
- * @returns Paginated result with items and cursor for next page
+ * @param paginationOpts - Pagination options (numItems, cursor)
+ * @returns PaginationResult with page, continueCursor, and isDone
  */
 export const listByWorkspace = query({
   args: {
     workspaceId: v.id("workspaces"),
-    cursor: v.optional(v.string()),
-    limit: v.optional(v.number()),
+    paginationOpts: paginationOptsValidator,
   },
-  handler: async (ctx, args): Promise<PaginatedSandboxRuns> => {
+  handler: async (ctx, args): Promise<PaginationResult<Doc<"sandboxRuns">>> => {
     // Check workspace membership
     const membership = await getUserMembership(ctx, args.workspaceId);
     if (membership === null) {
-      return { items: [], cursor: null };
+      return { page: [], continueCursor: "", isDone: true };
     }
 
-    const limit = args.limit ?? 50;
-
-    // Build query with descending order for consistent pagination
-    const query = ctx.db
+    // Use built-in pagination - only loads requested page size
+    return await ctx.db
       .query("sandboxRuns")
       .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
-      .order("desc");
-
-    // Collect all results to enable cursor-based filtering
-    // For large datasets, consider adding a composite index with _creationTime
-    const allResults = await query.collect();
-
-    // If we have a cursor, find its position and start after it
-    let startIndex = 0;
-    if (args.cursor) {
-      const cursorIndex = allResults.findIndex((r) => r._id === args.cursor);
-      if (cursorIndex >= 0) {
-        startIndex = cursorIndex + 1;
-      }
-    }
-
-    // Take limit + 1 to detect if there are more items
-    const slice = allResults.slice(startIndex, startIndex + limit + 1);
-
-    // Determine if there are more items
-    const hasMore = slice.length > limit;
-    const items = hasMore ? slice.slice(0, limit) : slice;
-    const nextCursor = hasMore && items.length > 0 ? items[items.length - 1]._id : null;
-
-    return {
-      items,
-      cursor: nextCursor,
-    };
+      .order("desc")
+      .paginate(args.paginationOpts);
   },
 });
 
