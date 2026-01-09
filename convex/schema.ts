@@ -16,7 +16,7 @@ export default defineSchema({
     name: v.string(),
     ownerId: v.string(),
     createdAt: v.number(),
-  }),
+  }).index("by_owner", ["ownerId"]),
 
   // Workspace membership with role-based access
   workspaceMembers: defineTable({
@@ -26,7 +26,8 @@ export default defineSchema({
     joinedAt: v.number(),
   })
     .index("by_user", ["userId"])
-    .index("by_workspace", ["workspaceId"]),
+    .index("by_workspace", ["workspaceId"])
+    .index("by_workspace_user", ["workspaceId", "userId"]),
 
   // E2B sandbox execution tracking
   sandboxRuns: defineTable({
@@ -57,7 +58,8 @@ export default defineSchema({
   })
     .index("by_thread", ["threadId"])
     .index("by_workspace", ["workspaceId"])
-    .index("by_status", ["status"]),
+    .index("by_status", ["status"])
+    .index("by_status_activity", ["status", "lastActivityAt"]),
 
   // Artifacts produced by sandbox runs
   artifacts: defineTable({
