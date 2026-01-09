@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query, internalMutation, internalQuery } from "./_generated/server";
+import { mutation, query, internalMutation, internalQuery, MutationCtx } from "./_generated/server";
 import { Id, Doc } from "./_generated/dataModel";
 import {
   SandboxStatus,
@@ -7,6 +7,67 @@ import {
   getTransitionError,
 } from "./lib/stateMachine";
 import { getUserMembership, getSandboxRunAccess } from "./lib/authorization";
+
+// ============================================================================
+// Internal Helper Functions (not exported)
+// ============================================================================
+
+/**
+ * Update args type for sandbox runs
+ */
+type SandboxRunUpdateArgs = {
+  sandboxId?: string;
+  status?: "booting" | "running" | "succeeded" | "failed" | "canceled";
+  finishedAt?: number;
+  lastActivityAt?: number;
+  e2bCost?: number;
+  error?: { message: string; code?: string; details?: string };
+};
+
+/**
+ * Shared helper to perform sandbox run updates
+ * Handles: fetching run, validating transition, building update object, patching DB
+ * @param ctx - The mutation context
+ * @param sandboxRunId - The ID of the sandbox run to update
+ * @param sandboxRun - The current sandbox run document
+ * @param args - The update arguments
+ */
+async function performSandboxRunUpdate(
+  ctx: MutationCtx,
+  sandboxRunId: Id<"sandboxRuns">,
+  sandboxRun: Doc<"sandboxRuns">,
+  args: SandboxRunUpdateArgs
+): Promise<void> {
+  // Validate status transition if status is being changed
+  if (args.status !== undefined && args.status !== sandboxRun.status) {
+    const isValid = validateTransition(
+      sandboxRun.status as SandboxStatus,
+      args.status as SandboxStatus
+    );
+    if (!isValid) {
+      throw new Error(
+        getTransitionError(
+          sandboxRun.status as SandboxStatus,
+          args.status as SandboxStatus
+        )
+      );
+    }
+  }
+
+  // Build update object with only provided fields using Object.fromEntries
+  const updates = Object.fromEntries(
+    Object.entries({
+      sandboxId: args.sandboxId,
+      status: args.status,
+      finishedAt: args.finishedAt,
+      lastActivityAt: args.lastActivityAt,
+      e2bCost: args.e2bCost,
+      error: args.error,
+    }).filter(([_, value]) => value !== undefined)
+  );
+
+  await ctx.db.patch(sandboxRunId, updates);
+}
 
 /**
  * SandboxRun mutations
@@ -117,54 +178,16 @@ export const update = mutation({
     if (access === null) {
       throw new Error("Unauthorized: sandbox run not found or access denied");
     }
-    const { sandboxRun } = access;
 
-    // Validate status transition if status is being changed
-    if (args.status !== undefined && args.status !== sandboxRun.status) {
-      const isValid = validateTransition(
-        sandboxRun.status as SandboxStatus,
-        args.status as SandboxStatus
-      );
-      if (!isValid) {
-        throw new Error(
-          getTransitionError(
-            sandboxRun.status as SandboxStatus,
-            args.status as SandboxStatus
-          )
-        );
-      }
-    }
-
-    // Build update object with only provided fields
-    const updates: Partial<{
-      sandboxId: string;
-      status: typeof args.status;
-      finishedAt: number;
-      lastActivityAt: number;
-      e2bCost: number;
-      error: typeof args.error;
-    }> = {};
-
-    if (args.sandboxId !== undefined) {
-      updates.sandboxId = args.sandboxId;
-    }
-    if (args.status !== undefined) {
-      updates.status = args.status;
-    }
-    if (args.finishedAt !== undefined) {
-      updates.finishedAt = args.finishedAt;
-    }
-    if (args.lastActivityAt !== undefined) {
-      updates.lastActivityAt = args.lastActivityAt;
-    }
-    if (args.e2bCost !== undefined) {
-      updates.e2bCost = args.e2bCost;
-    }
-    if (args.error !== undefined) {
-      updates.error = args.error;
-    }
-
-    await ctx.db.patch(args.sandboxRunId, updates);
+    // Use shared helper for update logic
+    await performSandboxRunUpdate(ctx, args.sandboxRunId, access.sandboxRun, {
+      sandboxId: args.sandboxId,
+      status: args.status,
+      finishedAt: args.finishedAt,
+      lastActivityAt: args.lastActivityAt,
+      e2bCost: args.e2bCost,
+      error: args.error,
+    });
   },
 });
 
@@ -322,52 +345,15 @@ export const internalUpdate = internalMutation({
       throw new Error("Sandbox run not found");
     }
 
-    // Validate status transition if status is being changed
-    if (args.status !== undefined && args.status !== sandboxRun.status) {
-      const isValid = validateTransition(
-        sandboxRun.status as SandboxStatus,
-        args.status as SandboxStatus
-      );
-      if (!isValid) {
-        throw new Error(
-          getTransitionError(
-            sandboxRun.status as SandboxStatus,
-            args.status as SandboxStatus
-          )
-        );
-      }
-    }
-
-    // Build update object with only provided fields
-    const updates: Partial<{
-      sandboxId: string;
-      status: typeof args.status;
-      finishedAt: number;
-      lastActivityAt: number;
-      e2bCost: number;
-      error: typeof args.error;
-    }> = {};
-
-    if (args.sandboxId !== undefined) {
-      updates.sandboxId = args.sandboxId;
-    }
-    if (args.status !== undefined) {
-      updates.status = args.status;
-    }
-    if (args.finishedAt !== undefined) {
-      updates.finishedAt = args.finishedAt;
-    }
-    if (args.lastActivityAt !== undefined) {
-      updates.lastActivityAt = args.lastActivityAt;
-    }
-    if (args.e2bCost !== undefined) {
-      updates.e2bCost = args.e2bCost;
-    }
-    if (args.error !== undefined) {
-      updates.error = args.error;
-    }
-
-    await ctx.db.patch(args.sandboxRunId, updates);
+    // Use shared helper for update logic
+    await performSandboxRunUpdate(ctx, args.sandboxRunId, sandboxRun, {
+      sandboxId: args.sandboxId,
+      status: args.status,
+      finishedAt: args.finishedAt,
+      lastActivityAt: args.lastActivityAt,
+      e2bCost: args.e2bCost,
+      error: args.error,
+    });
   },
 });
 

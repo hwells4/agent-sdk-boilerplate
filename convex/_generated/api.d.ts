@@ -12,6 +12,7 @@ import type * as actions_killIdleSandboxes from "../actions/killIdleSandboxes.js
 import type * as actions_startSandboxRun from "../actions/startSandboxRun.js";
 import type * as artifacts from "../artifacts.js";
 import type * as crons from "../crons.js";
+import type * as lib_authorization from "../lib/authorization.js";
 import type * as lib_constants from "../lib/constants.js";
 import type * as lib_stateMachine from "../lib/stateMachine.js";
 import type * as lib_validators from "../lib/validators.js";
@@ -30,6 +31,7 @@ declare const fullApi: ApiFromModules<{
   "actions/startSandboxRun": typeof actions_startSandboxRun;
   artifacts: typeof artifacts;
   crons: typeof crons;
+  "lib/authorization": typeof lib_authorization;
   "lib/constants": typeof lib_constants;
   "lib/stateMachine": typeof lib_stateMachine;
   "lib/validators": typeof lib_validators;
