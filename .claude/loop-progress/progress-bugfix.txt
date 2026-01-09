@@ -1,0 +1,22 @@
+# Progress: bugfix
+
+Verify: (none)
+
+## Codebase Patterns
+- Convex pagination: Use `paginationOptsValidator` from `convex/server` and `.paginate(args.paginationOpts)` instead of `.collect()` with manual slicing
+- Return type for paginated queries: `PaginationResult<Doc<"tableName">>` with `{page, continueCursor, isDone}`
+- Empty result for unauthorized access: `{ page: [], continueCursor: "", isDone: true }`
+- Post-fetch filtering with pagination requires iterative approach (fetch pages until enough filtered results)
+
+---
+
+## 2026-01-09 - claude-agent-sdk-experiments-yb3
+- Fixed pagination memory issue by replacing `.collect()` with `.paginate()`
+- Files changed:
+  - `convex/sandboxRuns.ts`: Updated `listByWorkspace` to use built-in `.paginate()`
+  - `convex/artifacts.ts`: Updated `listByRun` to use built-in `.paginate()`
+  - `convex/artifacts.ts`: Updated `listPending` to use iterative pagination (full fix requires workspaceId denormalization from separate story)
+- Learnings: Convex's `.paginate()` returns `PaginationResult` with different field names (`page` not `items`, `continueCursor` not `cursor`)
+- Gotchas: `listPending` cannot be fully O(page_size) without schema change - artifacts need `workspaceId` field for efficient filtering
+---
+
