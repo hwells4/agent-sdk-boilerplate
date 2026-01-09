@@ -329,3 +329,20 @@
 - Convex folder typechecks cleanly via `cd convex && npx tsc --noEmit`
 - Data integrity: Prevents orphaned artifacts and sandboxRuns when workspace is deleted
 ---
+
+## 2026-01-08 - US-020
+- Added boot timeout cleanup to cron job to clean up stuck booting sandboxes
+- Changes to convex/sandboxRuns.ts:
+  - Added internalFindStuckBooting query to find sandboxes stuck in 'booting' state
+  - Query returns sandboxes where status='booting' AND startedAt < (now - maxBootMs)
+  - Uses by_status index for efficient lookup
+- Changes to convex/actions/killIdleSandboxes.ts:
+  - Imports IDLE_TIMEOUT_MS and BOOT_TIMEOUT_MS from lib/constants (removed hardcoded value)
+  - Queries both internalFindIdle AND internalFindStuckBooting in parallel using Promise.all
+  - Combines results with deduplication by _id using Map
+  - Processing uses Promise.allSettled with batches of 10 for parallelization
+  - Updated JSDoc and logging to reflect both idle and stuck booting sandboxes
+- Files changed: convex/sandboxRuns.ts, convex/actions/killIdleSandboxes.ts
+- Convex folder typechecks cleanly via `cd convex && npx tsc --noEmit`
+- Pattern: Batch parallelization with Promise.allSettled provides efficient processing while handling errors gracefully
+---

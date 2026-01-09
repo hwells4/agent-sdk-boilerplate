@@ -323,7 +323,7 @@
         "npx tsc --noEmit passes"
       ],
       "priority": 20,
-      "passes": false,
+      "passes": true,
       "notes": "Phase 3 P2 Important - Clean up sandboxes stuck in booting state. DEPENDS ON US-012."
     },
     {
