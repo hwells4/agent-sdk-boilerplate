@@ -17,6 +17,7 @@ Verify: (none)
 - Type derivation: Use `Infer<typeof validator>` from convex/values to derive types from validators, re-export for backward compatibility
 - Authorization standardization: Use `getUserMembership` helper for queries (returns null), `requireWorkspaceMembership` for mutations (throws); always use `by_workspace_user` composite index
 - Composite index range queries: Use `.eq(field1, value).lt(field2, cutoff)` to filter at index level; avoids fetching all records and filtering in memory
+- String length validation: Use helper functions in validators.ts to enforce length limits; validate early (fail fast before DB queries)
 
 ---
 
@@ -127,5 +128,17 @@ Verify: (none)
   - `convex/actions/startSandboxRun.ts`: Import and use IDLE_TIMEOUT_MS instead of hardcoded value
 - Learnings: Keep constants.ts lean - only export constants that are actually used
 - Benefits: Single source of truth for timeout values, easier to modify across codebase
+---
+
+## 2026-01-09 - claude-agent-sdk-experiments-oir
+- Added input length validation on string fields to prevent storage abuse
+- Files changed:
+  - `convex/lib/constants.ts`: Added MAX_NAME_LENGTH, MAX_TITLE_LENGTH, MAX_THREAD_ID_LENGTH, MAX_ERROR_* constants
+  - `convex/lib/validators.ts`: Added validateStringLength, validateName, validateTitle, validateThreadId, validateError helpers
+  - `convex/workspaces.ts`: Added validateName in create and update mutations
+  - `convex/artifacts.ts`: Added validateTitle/validateThreadId in create and internalCreate
+  - `convex/sandboxRuns.ts`: Added validateThreadId in create/internalCreate, validateError in update/internalUpdate
+- Pattern: Validate input lengths early (before DB queries) to fail fast
+- Limits: name ≤100, title ≤200, threadId ≤100, error.message ≤1000, error.code ≤50, error.details ≤2000
 ---
 
