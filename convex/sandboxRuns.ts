@@ -318,6 +318,12 @@ export const internalCreate = internalMutation({
     idleTimeoutMs: v.optional(v.number()),
   },
   handler: async (ctx, args): Promise<Id<"sandboxRuns">> => {
+    // Validate workspace exists (FK check)
+    const workspace = await ctx.db.get(args.workspaceId);
+    if (workspace === null) {
+      throw new Error(`Workspace not found: ${args.workspaceId}`);
+    }
+
     const now = Date.now();
     const sandboxRunId = await ctx.db.insert("sandboxRuns", {
       threadId: args.threadId,

@@ -86,6 +86,25 @@ export const internalCreate = internalMutation({
     previewText: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<Id<"artifacts">> => {
+    // Validate sandbox run exists (FK check)
+    const sandboxRun = await ctx.db.get(args.sandboxRunId);
+    if (sandboxRun === null) {
+      throw new Error(`Sandbox run not found: ${args.sandboxRunId}`);
+    }
+
+    // Validate workspace exists (FK check)
+    const workspace = await ctx.db.get(args.workspaceId);
+    if (workspace === null) {
+      throw new Error(`Workspace not found: ${args.workspaceId}`);
+    }
+
+    // Validate consistency: sandbox run belongs to specified workspace
+    if (sandboxRun.workspaceId !== args.workspaceId) {
+      throw new Error(
+        `Workspace mismatch: sandbox run belongs to workspace ${sandboxRun.workspaceId}, not ${args.workspaceId}`
+      );
+    }
+
     const now = Date.now();
     const artifactId = await ctx.db.insert("artifacts", {
       sandboxRunId: args.sandboxRunId,
