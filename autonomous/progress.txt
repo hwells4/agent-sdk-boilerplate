@@ -377,3 +377,18 @@
 - Convex folder typechecks cleanly via `cd convex && npx tsc --noEmit`
 - Pattern: Object.fromEntries with filter is a clean way to build partial update objects
 ---
+
+## 2026-01-08 - US-024
+- Optimized workspaces.list query to fix N+1 query pattern
+- Removed duplicate getUserWorkspaces function from workspaceMembers.ts
+- Changes to convex/workspaces.ts:
+  - Removed redundant ownership query (memberships already include owner role)
+  - Replaced sequential for loop with Promise.all for batch fetching
+  - Uses by_user index on workspaceMembers for efficient lookup
+  - Proper type narrowing with NonNullable filter for null workspace removal
+- Changes to convex/workspaceMembers.ts:
+  - Removed getUserWorkspaces function (duplicate of workspaces.list)
+- Files changed: convex/workspaces.ts, convex/workspaceMembers.ts
+- Convex folder typechecks cleanly via `cd convex && npx tsc --noEmit`
+- Pattern: Promise.all is preferred over sequential for loops for independent async operations
+---
