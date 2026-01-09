@@ -197,25 +197,66 @@ export const get = query({
 });
 
 /**
- * List all sandbox runs for a workspace
+ * Pagination result type for sandbox runs
+ */
+type PaginatedSandboxRuns = {
+  items: Doc<"sandboxRuns">[];
+  cursor: string | null;
+};
+
+/**
+ * List sandbox runs for a workspace with pagination
  * @param workspaceId - The workspace ID
- * @returns Array of sandbox runs, or empty array if not authorized
+ * @param cursor - Optional cursor to continue from (document ID from previous page)
+ * @param limit - Optional limit (default 50)
+ * @returns Paginated result with items and cursor for next page
  */
 export const listByWorkspace = query({
   args: {
     workspaceId: v.id("workspaces"),
+    cursor: v.optional(v.string()),
+    limit: v.optional(v.number()),
   },
-  handler: async (ctx, args): Promise<Doc<"sandboxRuns">[]> => {
+  handler: async (ctx, args): Promise<PaginatedSandboxRuns> => {
     // Check workspace membership
     const membership = await getUserMembership(ctx, args.workspaceId);
     if (membership === null) {
-      return [];
+      return { items: [], cursor: null };
     }
 
-    return await ctx.db
+    const limit = args.limit ?? 50;
+
+    // Build query with descending order for consistent pagination
+    const query = ctx.db
       .query("sandboxRuns")
       .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
-      .collect();
+      .order("desc");
+
+    // Collect all results to enable cursor-based filtering
+    // For large datasets, consider adding a composite index with _creationTime
+    const allResults = await query.collect();
+
+    // If we have a cursor, find its position and start after it
+    let startIndex = 0;
+    if (args.cursor) {
+      const cursorIndex = allResults.findIndex((r) => r._id === args.cursor);
+      if (cursorIndex >= 0) {
+        startIndex = cursorIndex + 1;
+      }
+    }
+
+    // Take limit + 1 to detect if there are more items
+    const slice = allResults.slice(startIndex, startIndex + limit + 1);
+
+    // Determine if there are more items
+    const hasMore = slice.length > limit;
+    const items = hasMore ? slice.slice(0, limit) : slice;
+    const nextCursor = hasMore && items.length > 0 ? items[items.length - 1]._id : null;
+
+    return {
+      items,
+      cursor: nextCursor,
+    };
   },
 });
 

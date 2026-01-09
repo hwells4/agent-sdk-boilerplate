@@ -155,50 +155,97 @@ export const get = query({
 });
 
 /**
- * List all artifacts for a sandbox run
- * Returns empty array if user doesn't have access
+ * Pagination result type for artifacts
+ */
+type PaginatedArtifacts = {
+  items: Doc<"artifacts">[];
+  cursor: string | null;
+};
+
+/**
+ * List artifacts for a sandbox run with pagination
+ * Returns empty result if user doesn't have access
  * @param sandboxRunId - The sandbox run ID
- * @returns Array of artifacts
+ * @param cursor - Optional cursor to continue from (document ID from previous page)
+ * @param limit - Optional limit (default 50)
+ * @returns Paginated result with items and cursor for next page
  */
 export const listByRun = query({
   args: {
     sandboxRunId: v.id("sandboxRuns"),
+    cursor: v.optional(v.string()),
+    limit: v.optional(v.number()),
   },
-  handler: async (ctx, args): Promise<Doc<"artifacts">[]> => {
+  handler: async (ctx, args): Promise<PaginatedArtifacts> => {
     // Check workspace membership via sandbox run
     const access = await getSandboxRunAccess(ctx, args.sandboxRunId);
     if (access === null) {
-      return [];
+      return { items: [], cursor: null };
     }
 
-    return await ctx.db
+    const limit = args.limit ?? 50;
+
+    // Build query with descending order for consistent pagination
+    const query = ctx.db
       .query("artifacts")
       .withIndex("by_run", (q) => q.eq("sandboxRunId", args.sandboxRunId))
-      .collect();
+      .order("desc");
+
+    // Collect all results to enable cursor-based filtering
+    const allResults = await query.collect();
+
+    // If we have a cursor, find its position and start after it
+    let startIndex = 0;
+    if (args.cursor) {
+      const cursorIndex = allResults.findIndex((r) => r._id === args.cursor);
+      if (cursorIndex >= 0) {
+        startIndex = cursorIndex + 1;
+      }
+    }
+
+    // Take limit + 1 to detect if there are more items
+    const slice = allResults.slice(startIndex, startIndex + limit + 1);
+
+    // Determine if there are more items
+    const hasMore = slice.length > limit;
+    const items = hasMore ? slice.slice(0, limit) : slice;
+    const nextCursor = hasMore && items.length > 0 ? items[items.length - 1]._id : null;
+
+    return {
+      items,
+      cursor: nextCursor,
+    };
   },
 });
 
 /**
- * List all artifacts with pending review state for a workspace
+ * List artifacts with pending review state for a workspace with pagination
  * Requires workspaceId to prevent multi-tenant data leakage
  * @param workspaceId - The workspace to filter artifacts by
- * @returns Array of artifacts with reviewState 'pending' in the specified workspace
+ * @param cursor - Optional cursor to continue from (document ID from previous page)
+ * @param limit - Optional limit (default 50)
+ * @returns Paginated result with pending artifacts and cursor for next page
  */
 export const listPending = query({
   args: {
     workspaceId: v.id("workspaces"),
+    cursor: v.optional(v.string()),
+    limit: v.optional(v.number()),
   },
-  handler: async (ctx, args): Promise<Doc<"artifacts">[]> => {
+  handler: async (ctx, args): Promise<PaginatedArtifacts> => {
     // Check workspace membership
     const membership = await getUserMembership(ctx, args.workspaceId);
     if (membership === null) {
-      return [];
+      return { items: [], cursor: null };
     }
 
-    // Get all pending artifacts
+    const limit = args.limit ?? 50;
+
+    // Get all pending artifacts with descending order
     const allPending = await ctx.db
       .query("artifacts")
       .withIndex("by_review_state", (q) => q.eq("reviewState", "pending"))
+      .order("desc")
       .collect();
 
     // Filter to only artifacts belonging to this workspace's sandbox runs
@@ -210,6 +257,26 @@ export const listPending = query({
       }
     }
 
-    return workspaceArtifacts;
+    // If we have a cursor, find its position and start after it
+    let startIndex = 0;
+    if (args.cursor) {
+      const cursorIndex = workspaceArtifacts.findIndex((r) => r._id === args.cursor);
+      if (cursorIndex >= 0) {
+        startIndex = cursorIndex + 1;
+      }
+    }
+
+    // Take limit + 1 to detect if there are more items
+    const slice = workspaceArtifacts.slice(startIndex, startIndex + limit + 1);
+
+    // Determine if there are more items
+    const hasMore = slice.length > limit;
+    const items = hasMore ? slice.slice(0, limit) : slice;
+    const nextCursor = hasMore && items.length > 0 ? items[items.length - 1]._id : null;
+
+    return {
+      items,
+      cursor: nextCursor,
+    };
   },
 });

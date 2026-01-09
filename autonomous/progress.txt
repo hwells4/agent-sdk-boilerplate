@@ -412,3 +412,21 @@
 - Convex folder typechecks cleanly via `cd convex && npx tsc --noEmit`
 - Note: workspaceMembers.ts addMember/updateRole still use v.union(v.literal("admin"), v.literal("member")) intentionally (excludes "owner" which cannot be added/changed)
 ---
+
+## 2026-01-08 - US-026
+- Added pagination to list queries to prevent unbounded query results
+- Changes to convex/sandboxRuns.ts:
+  - Added PaginatedSandboxRuns type: { items: Doc<"sandboxRuns">[]; cursor: string | null }
+  - listByWorkspace now accepts optional cursor (string) and limit (number, default 50) args
+  - Uses .order("desc") for consistent pagination ordering
+  - Implements cursor-based pagination: finds cursor position, slices from there
+  - Uses take(limit + 1) pattern to detect hasMore, returns cursor of last item
+- Changes to convex/artifacts.ts:
+  - Added PaginatedArtifacts type: { items: Doc<"artifacts">[]; cursor: string | null }
+  - listByRun now accepts optional cursor and limit args
+  - listPending now accepts optional cursor and limit args
+  - Both use same pagination pattern as sandboxRuns.listByWorkspace
+- Files changed: convex/sandboxRuns.ts, convex/artifacts.ts
+- Convex folder typechecks cleanly via `cd convex && npx tsc --noEmit`
+- Pattern: Cursor-based pagination with slice and hasMore detection is simple but fetches all data; for very large datasets, consider composite indexes with range queries
+---

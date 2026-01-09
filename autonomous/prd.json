@@ -417,7 +417,7 @@
         "npx tsc --noEmit passes"
       ],
       "priority": 26,
-      "passes": false,
+      "passes": true,
       "notes": "Phase 4 P3 Nice-to-have - Prevent unbounded query results"
     },
     {
