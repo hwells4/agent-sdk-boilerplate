@@ -315,3 +315,17 @@
 - Convex folder typechecks cleanly via `cd convex && npx tsc --noEmit`
 - Security: Prevents unauthorized users from creating sandbox runs (critical P1 fix)
 ---
+
+## 2026-01-08 - US-019
+- Fixed cascade delete on workspace removal to prevent orphaned records
+- Updated convex/workspaces.ts remove mutation:
+  - Now deletes ALL sandboxRuns for workspace BEFORE deleting workspace
+  - Deletes ALL artifacts for each sandboxRun BEFORE deleting the run
+  - Deletion order: artifacts -> sandboxRuns -> workspaceMembers -> workspace
+  - Uses by_workspace index to find sandboxRuns
+  - Uses by_run index to find artifacts for each run
+  - Storage blobs left for Convex GC (no manual deletion needed)
+- Files changed: convex/workspaces.ts
+- Convex folder typechecks cleanly via `cd convex && npx tsc --noEmit`
+- Data integrity: Prevents orphaned artifacts and sandboxRuns when workspace is deleted
+---
