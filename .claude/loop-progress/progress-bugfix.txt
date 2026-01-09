@@ -15,6 +15,8 @@ Verify: (none)
 - Privilege escalation prevention: For role changes that involve admin privileges, require owner role (not just admin)
 - Batch operations for cascade deletion: Use Promise.all with proper ordering (children before parents) to avoid timeout
 - Type derivation: Use `Infer<typeof validator>` from convex/values to derive types from validators, re-export for backward compatibility
+- Authorization standardization: Use `getUserMembership` helper for queries (returns null), `requireWorkspaceMembership` for mutations (throws); always use `by_workspace_user` composite index
+- Composite index range queries: Use `.eq(field1, value).lt(field2, cutoff)` to filter at index level; avoids fetching all records and filtering in memory
 
 ---
 
@@ -95,5 +97,26 @@ Verify: (none)
   - `convex/sandboxRuns.ts`: Removed `as SandboxStatus` casts, updated `SandboxRunUpdateArgs` type
 - Learnings: Re-export types with `export type { TypeName }` for backward compatibility with existing imports
 - Benefits: TypeScript now catches type mismatches at compile time; single source of truth eliminates drift
+---
+
+## 2026-01-09 - claude-agent-sdk-experiments-azs
+- Standardized authorization patterns across all files to use shared helpers
+- Files changed:
+  - `convex/workspaces.ts`: Use `getUserMembership` in `get` query (removed inline filter)
+  - `convex/workspaceMembers.ts`: Use `by_workspace_user` composite index in `addMember`, `removeMember`, `updateRole`
+  - `convex/workspaceMembers.ts`: Use `getUserMembership` in `listMembers` for auth check
+  - `convex/sandboxRuns.ts`: Use `getUserMembership` in `create` mutation
+- Learnings: All membership lookups should use `by_workspace_user` composite index for O(1) lookup
+- Pattern: `getUserMembership` returns null (for queries), `requireWorkspaceMembership` throws (for mutations)
+---
+
+## 2026-01-09 - claude-agent-sdk-experiments-0dd
+- Updated internalFindIdle to use by_status_activity composite index for better query performance
+- Files changed:
+  - `convex/sandboxRuns.ts`: Refactored internalFindIdle to use composite index with range query
+- Before: Fetched all "running" sandboxes with by_status, then filtered lastActivityAt in memory
+- After: Uses by_status_activity with `.eq("status", "running").lt("lastActivityAt", cutoffTime)` to filter at index level
+- Only remaining in-memory filter: sandboxId !== undefined check (cannot be indexed efficiently)
+- Performance: Database now returns only relevant results instead of all running sandboxes
 ---
 
