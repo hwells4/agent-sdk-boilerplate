@@ -6,7 +6,8 @@ Verify: (none)
 - Convex pagination: Use `paginationOptsValidator` from `convex/server` and `.paginate(args.paginationOpts)` instead of `.collect()` with manual slicing
 - Return type for paginated queries: `PaginationResult<Doc<"tableName">>` with `{page, continueCursor, isDone}`
 - Empty result for unauthorized access: `{ page: [], continueCursor: "", isDone: true }`
-- Post-fetch filtering with pagination requires iterative approach (fetch pages until enough filtered results)
+- Denormalization: For efficient queries that filter on parent entity fields, denormalize the field onto the child table
+- Composite indexes: Use `.index("name", [field1, field2])` for queries filtering on multiple fields
 
 ---
 
@@ -18,5 +19,17 @@ Verify: (none)
   - `convex/artifacts.ts`: Updated `listPending` to use iterative pagination (full fix requires workspaceId denormalization from separate story)
 - Learnings: Convex's `.paginate()` returns `PaginationResult` with different field names (`page` not `items`, `continueCursor` not `cursor`)
 - Gotchas: `listPending` cannot be fully O(page_size) without schema change - artifacts need `workspaceId` field for efficient filtering
+---
+
+## 2026-01-09 - claude-agent-sdk-experiments-2rb
+- Denormalized workspaceId onto artifacts table to eliminate N+1 query in listPending
+- Files changed:
+  - `convex/schema.ts`: Added `workspaceId` field and `by_workspace_review` composite index
+  - `convex/artifacts.ts`: Updated `create` to populate workspaceId from sandboxRun access
+  - `convex/artifacts.ts`: Updated `internalCreate` to accept workspaceId parameter
+  - `convex/artifacts.ts`: Simplified `listPending` to single index query (was 60+ lines of iterative pagination)
+  - `convex/artifacts.ts`: Added `backfillWorkspaceId` internal mutation for existing data
+- Learnings: Type assertion `(artifact as { workspaceId?: unknown }).workspaceId` needed for backfill of optional-in-runtime field
+- Performance: Query now O(1) database reads regardless of pending artifact count
 ---
 
