@@ -142,3 +142,18 @@ Verify: (none)
 - Limits: name ≤100, title ≤200, threadId ≤100, error.message ≤1000, error.code ≤50, error.details ≤2000
 ---
 
+## 2026-01-09 - claude-agent-sdk-experiments-fhd
+- Added cancelSandboxRun action for user-facing cancellation
+- Files changed:
+  - `convex/sandboxRuns.ts`: Added `internalGet` query for action use
+  - `convex/actions/cancelSandboxRun.ts`: New action that handles complete cancellation workflow
+- Implementation:
+  1. Verifies user authentication
+  2. Fetches sandbox run via internalGet
+  3. Checks workspace membership via internalGetMembership
+  4. Kills E2B sandbox via Sandbox.connect().kill() (gracefully handles already-dead sandboxes)
+  5. Updates status to 'canceled' with finishedAt via internalUpdate
+- Pattern: Actions use internal queries/mutations - internalGet for fetching, internalGetMembership for auth
+- Uses skipTerminalStates to prevent race condition errors when sandbox completes between query and update
+---
+
