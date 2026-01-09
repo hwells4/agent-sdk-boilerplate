@@ -3,71 +3,99 @@
 import { internalAction } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { Sandbox } from "@e2b/code-interpreter";
+import { IDLE_TIMEOUT_MS, BOOT_TIMEOUT_MS } from "../lib/constants";
+import { Doc } from "../_generated/dataModel";
 
 /**
- * Kill idle sandboxes to prevent runaway costs.
+ * Kill idle and stuck booting sandboxes to prevent runaway costs.
  *
  * This action:
  * 1. Queries for running sandboxes that have been idle > 15 minutes
- * 2. Connects to each sandbox and kills it
- * 3. Updates the sandboxRun status to 'canceled' with finishedAt timestamp
+ * 2. Queries for sandboxes stuck in booting state > 5 minutes
+ * 3. Connects to each sandbox and kills it (if sandboxId exists)
+ * 4. Updates the sandboxRun status to 'canceled' with finishedAt timestamp
  *
+ * Uses Promise.allSettled with batches of 10 for efficient parallelization.
  * Designed to be run by a cron job every 30 seconds.
  */
 export const killIdleSandboxes = internalAction({
   args: {},
   handler: async (ctx): Promise<{ killed: number; errors: number }> => {
-    // 15 minute idle timeout
-    const IDLE_TIMEOUT_MS = 15 * 60 * 1000;
+    // Query for idle running sandboxes and stuck booting sandboxes in parallel
+    const [idleRuns, stuckBootingRuns] = await Promise.all([
+      ctx.runQuery(internal.sandboxRuns.internalFindIdle, {
+        maxIdleMs: IDLE_TIMEOUT_MS,
+      }),
+      ctx.runQuery(internal.sandboxRuns.internalFindStuckBooting, {
+        maxBootMs: BOOT_TIMEOUT_MS,
+      }),
+    ]);
 
-    // Query for idle running sandboxes
-    const idleRuns = await ctx.runQuery(internal.sandboxRuns.internalFindIdle, {
-      maxIdleMs: IDLE_TIMEOUT_MS,
-    });
+    // Combine both lists (avoiding duplicates by _id)
+    const runMap = new Map<string, Doc<"sandboxRuns">>();
+    for (const run of idleRuns) {
+      runMap.set(run._id.toString(), run);
+    }
+    for (const run of stuckBootingRuns) {
+      runMap.set(run._id.toString(), run);
+    }
+    const allRuns = Array.from(runMap.values());
 
-    if (idleRuns.length === 0) {
+    if (allRuns.length === 0) {
       return { killed: 0, errors: 0 };
     }
 
     let killed = 0;
     let errors = 0;
 
-    // Kill each idle sandbox
-    for (const run of idleRuns) {
-      try {
-        // Connect to the sandbox and kill it
-        // Note: sandbox.kill() may throw if sandbox is already dead
-        if (run.sandboxId) {
-          try {
-            const sandbox = await Sandbox.connect(run.sandboxId);
-            await sandbox.kill();
-          } catch (sandboxError) {
-            // Sandbox may already be dead - this is fine, continue with status update
-            console.log(
-              `Sandbox ${run.sandboxId} may already be terminated: ${sandboxError}`
-            );
-          }
+    /**
+     * Process a single sandbox run - kill the sandbox and update status
+     */
+    const processRun = async (run: Doc<"sandboxRuns">): Promise<boolean> => {
+      // Connect to the sandbox and kill it if sandboxId exists
+      // Note: sandbox.kill() may throw if sandbox is already dead
+      if (run.sandboxId) {
+        try {
+          const sandbox = await Sandbox.connect(run.sandboxId);
+          await sandbox.kill();
+        } catch (sandboxError) {
+          // Sandbox may already be dead - this is fine, continue with status update
+          console.log(
+            `Sandbox ${run.sandboxId} may already be terminated: ${sandboxError}`
+          );
         }
+      }
 
-        // Update the run status to 'canceled' with finishedAt
-        await ctx.runMutation(internal.sandboxRuns.internalUpdate, {
-          sandboxRunId: run._id,
-          status: "canceled",
-          finishedAt: Date.now(),
-        });
+      // Update the run status to 'canceled' with finishedAt
+      await ctx.runMutation(internal.sandboxRuns.internalUpdate, {
+        sandboxRunId: run._id,
+        status: "canceled",
+        finishedAt: Date.now(),
+      });
 
-        killed++;
-      } catch (error) {
-        // Log error but continue processing other sandboxes
-        console.error(
-          `Failed to kill sandbox run ${run._id}: ${error instanceof Error ? error.message : String(error)}`
-        );
-        errors++;
+      return true;
+    };
+
+    // Process in batches of 10 for parallelization
+    const BATCH_SIZE = 10;
+    for (let i = 0; i < allRuns.length; i += BATCH_SIZE) {
+      const batch = allRuns.slice(i, i + BATCH_SIZE);
+      const results = await Promise.allSettled(batch.map(processRun));
+
+      for (const result of results) {
+        if (result.status === "fulfilled") {
+          killed++;
+        } else {
+          console.error(
+            `Failed to kill sandbox run: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`
+          );
+          errors++;
+        }
       }
     }
 
     console.log(
-      `Idle sandbox cleanup: killed ${killed}, errors ${errors}, total found ${idleRuns.length}`
+      `Sandbox cleanup: killed ${killed}, errors ${errors}, total found ${allRuns.length} (idle: ${idleRuns.length}, stuck booting: ${stuckBootingRuns.length})`
     );
 
     return { killed, errors };

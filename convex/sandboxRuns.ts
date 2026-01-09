@@ -406,3 +406,33 @@ export const internalFindIdle = internalQuery({
     });
   },
 });
+
+/**
+ * Internal query to find sandboxes stuck in booting state (for use by cron job)
+ * Returns sandboxes where:
+ * - status is 'booting'
+ * - startedAt < (now - maxBootMs)
+ *
+ * @param maxBootMs - Maximum boot time in milliseconds
+ * @returns Array of stuck booting sandbox runs
+ */
+export const internalFindStuckBooting = internalQuery({
+  args: {
+    maxBootMs: v.number(),
+  },
+  handler: async (ctx, args): Promise<Doc<"sandboxRuns">[]> => {
+    const now = Date.now();
+    const cutoffTime = now - args.maxBootMs;
+
+    // Get all booting sandboxes
+    const bootingSandboxes = await ctx.db
+      .query("sandboxRuns")
+      .withIndex("by_status", (q) => q.eq("status", "booting"))
+      .collect();
+
+    // Filter to sandboxes that have been booting too long
+    return bootingSandboxes.filter((run) => {
+      return run.startedAt < cutoffTime;
+    });
+  },
+});
