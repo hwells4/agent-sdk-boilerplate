@@ -381,6 +381,10 @@ export const internalUpdate = internalMutation({
  * - sandboxId exists (sandbox was actually created)
  * - (now - lastActivityAt) > maxIdleMs
  *
+ * Uses by_status_activity composite index to filter at index level:
+ * - First field: status = "running"
+ * - Second field: lastActivityAt < cutoffTime (using .lt() range query)
+ *
  * @param maxIdleMs - Maximum idle time in milliseconds
  * @returns Array of idle sandbox runs
  */
@@ -392,21 +396,20 @@ export const internalFindIdle = internalQuery({
     const now = Date.now();
     const cutoffTime = now - args.maxIdleMs;
 
-    // Get all running sandboxes
-    const runningSandboxes = await ctx.db
+    // Use composite index to filter at index level instead of in memory
+    // by_status_activity: ["status", "lastActivityAt"]
+    // - eq("status", "running") filters to running sandboxes
+    // - lt("lastActivityAt", cutoffTime) filters to those idle too long
+    const idleSandboxes = await ctx.db
       .query("sandboxRuns")
-      .withIndex("by_status", (q) => q.eq("status", "running"))
+      .withIndex("by_status_activity", (q) =>
+        q.eq("status", "running").lt("lastActivityAt", cutoffTime)
+      )
       .collect();
 
-    // Filter to idle sandboxes with a valid sandboxId
-    return runningSandboxes.filter((run) => {
-      // Must have a sandboxId (sandbox was actually created)
-      if (run.sandboxId === undefined) {
-        return false;
-      }
-      // Must be idle longer than maxIdleMs
-      return run.lastActivityAt < cutoffTime;
-    });
+    // Only filter to sandboxes with a valid sandboxId (sandbox was actually created)
+    // This is the only in-memory filter needed now
+    return idleSandboxes.filter((run) => run.sandboxId !== undefined);
   },
 });
 
