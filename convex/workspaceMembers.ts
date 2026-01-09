@@ -252,41 +252,6 @@ export const listMembers = query({
 });
 
 /**
- * Get workspaces the current user belongs to
- * @returns Array of workspaces with the user's role in each
- */
-export const getUserWorkspaces = query({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (identity === null) {
-      return [];
-    }
-
-    // Get all memberships for the current user
-    const memberships = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_user", (q) => q.eq("userId", identity.subject))
-      .collect();
-
-    // Get workspace details for each membership
-    const workspacesWithRole = [];
-    for (const membership of memberships) {
-      const workspace = await ctx.db.get(membership.workspaceId);
-      if (workspace !== null) {
-        workspacesWithRole.push({
-          ...workspace,
-          role: membership.role,
-          joinedAt: membership.joinedAt,
-        });
-      }
-    }
-
-    return workspacesWithRole;
-  },
-});
-
-/**
  * Internal query to get a user's membership in a workspace
  * Used by actions to check authorization without ctx.auth
  * @param workspaceId - The ID of the workspace

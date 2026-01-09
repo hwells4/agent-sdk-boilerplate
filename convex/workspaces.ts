@@ -186,7 +186,10 @@ export const get = query({
 
 /**
  * List all workspaces for the current user
- * Returns workspaces where the user is the owner
+ * Returns workspaces where the user is a member (including owner)
+ *
+ * Optimized: Uses by_user index on memberships and Promise.all for batch fetching
+ * Note: Owner membership is already included in workspaceMembers (created on workspace creation)
  */
 export const list = query({
   args: {},
@@ -196,36 +199,22 @@ export const list = query({
       return [];
     }
 
-    // Get workspaces owned by the user
-    const ownedWorkspaces = await ctx.db
-      .query("workspaces")
-      .filter((q) => q.eq(q.field("ownerId"), identity.subject))
-      .collect();
-
-    // Get workspaces where user is a member (but not owner)
+    // Get all memberships for the current user (includes owner membership)
     const memberships = await ctx.db
       .query("workspaceMembers")
       .withIndex("by_user", (q) => q.eq("userId", identity.subject))
       .collect();
 
-    // Get the workspace details for memberships
-    const memberWorkspaceIds = new Set(ownedWorkspaces.map((w) => w._id));
-    const memberWorkspaces = [];
+    // Batch fetch all workspaces in parallel using Promise.all
+    const workspacePromises = memberships.map((membership) =>
+      ctx.db.get(membership.workspaceId)
+    );
+    const workspaces = await Promise.all(workspacePromises);
 
-    for (const membership of memberships) {
-      // Skip if already in owned workspaces
-      if (memberWorkspaceIds.has(membership.workspaceId)) {
-        continue;
-      }
-
-      const workspace = await ctx.db.get(membership.workspaceId);
-      if (workspace !== null) {
-        memberWorkspaces.push(workspace);
-        memberWorkspaceIds.add(workspace._id);
-      }
-    }
-
-    // Combine and return all workspaces
-    return [...ownedWorkspaces, ...memberWorkspaces];
+    // Filter out null values with proper type narrowing
+    return workspaces.filter(
+      (workspace): workspace is NonNullable<typeof workspace> =>
+        workspace !== null
+    );
   },
 });
