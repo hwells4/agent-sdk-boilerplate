@@ -12,6 +12,8 @@
 - convex/_generated/ - Auto-generated type definitions (can be stubbed for local dev)
 - convex/tsconfig.json - TypeScript config for Convex functions
 - convex/lib/stateMachine.ts - State machine for sandbox run status transitions
+- convex/lib/constants.ts - Shared timeout constants (IDLE_TIMEOUT_MS, BOOT_TIMEOUT_MS, DEFAULT_MAX_DURATION_MS)
+- convex/lib/validators.ts - Shared Convex validators (sandboxStatusValidator, artifactTypeValidator, reviewStateValidator, memberRoleValidator)
 - convex/sandboxRuns.ts - CRUD mutations for sandbox runs with state validation
 - convex/artifacts.ts - CRUD mutations for artifacts with HITL review workflow
 - convex/actions/startSandboxRun.ts - E2B sandbox creation action with 'use node' directive
@@ -206,5 +208,30 @@
   - Added "Convex Development" section with npx convex commands
   - Documents tables and state machine overview
 - Files changed: .env.example, CLAUDE.md
+- Convex folder typechecks cleanly via `cd convex && npx tsc --noEmit`
+---
+
+## 2026-01-08 - US-012
+- Created convex/lib/constants.ts with shared timeout constants
+- Exports:
+  - IDLE_TIMEOUT_MS = 15 * 60 * 1000 (15 minutes for idle sandbox cleanup)
+  - BOOT_TIMEOUT_MS = 5 * 60 * 1000 (5 minutes for stuck boot detection)
+  - DEFAULT_MAX_DURATION_MS = 2 * 60 * 1000 (2 minutes default run timeout)
+- JSDoc comments explain purpose of each constant
+- Files changed: convex/lib/constants.ts (new)
+- Convex folder typechecks cleanly via `cd convex && npx tsc --noEmit`
+---
+
+## 2026-01-08 - US-013
+- Created convex/lib/validators.ts with shared Convex validators
+- Exports:
+  - sandboxStatusValidator: booting, running, succeeded, failed, canceled
+  - artifactTypeValidator: file, image, code, log, other
+  - reviewStateValidator: pending, approved, rejected
+  - memberRoleValidator: owner, admin, member
+- All validators use v.union() and v.literal() from convex/values
+- JSDoc comments explain purpose of each validator
+- Single source of truth for enum-like values used in schema and mutations
+- Files changed: convex/lib/validators.ts (new)
 - Convex folder typechecks cleanly via `cd convex && npx tsc --noEmit`
 ---
