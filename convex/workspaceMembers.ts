@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query, internalQuery } from "./_generated/server";
 import { Id, Doc } from "./_generated/dataModel";
-import { requireWorkspaceMembership } from "./lib/authorization";
+import { getUserMembership, requireWorkspaceMembership } from "./lib/authorization";
 
 /**
  * Add a member to a workspace
@@ -31,11 +31,12 @@ export const addMember = mutation({
       throw new Error("Unauthorized: only owners can add admin members");
     }
 
-    // Check if user is already a member
+    // Check if user is already a member using composite index for O(1) lookup
     const existingMembership = await ctx.db
       .query("workspaceMembers")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
-      .filter((q) => q.eq(q.field("userId"), args.userId))
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", args.workspaceId).eq("userId", args.userId)
+      )
       .first();
 
     if (existingMembership !== null) {
@@ -74,11 +75,12 @@ export const removeMember = mutation({
     // Check if current user can manage members (owner or admin)
     const currentMembership = await requireWorkspaceMembership(ctx, args.workspaceId, ["owner", "admin"]);
 
-    // Find the membership to remove
+    // Find the membership to remove using composite index for O(1) lookup
     const membership = await ctx.db
       .query("workspaceMembers")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
-      .filter((q) => q.eq(q.field("userId"), args.userId))
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", args.workspaceId).eq("userId", args.userId)
+      )
       .first();
 
     if (membership === null) {
@@ -122,11 +124,12 @@ export const updateRole = mutation({
     // Check if current user can manage members (owner or admin)
     const currentMembership = await requireWorkspaceMembership(ctx, args.workspaceId, ["owner", "admin"]);
 
-    // Find the membership to update
+    // Find the membership to update using composite index for O(1) lookup
     const membership = await ctx.db
       .query("workspaceMembers")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
-      .filter((q) => q.eq(q.field("userId"), args.userId))
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", args.workspaceId).eq("userId", args.userId)
+      )
       .first();
 
     if (membership === null) {
@@ -161,25 +164,9 @@ export const listMembers = query({
     workspaceId: v.id("workspaces"),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (identity === null) {
-      return [];
-    }
-
-    // Check if workspace exists
-    const workspace = await ctx.db.get(args.workspaceId);
-    if (workspace === null) {
-      return [];
-    }
-
-    // Check if user is a member
-    const userMembership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
-      .filter((q) => q.eq(q.field("userId"), identity.subject))
-      .first();
-
-    if (userMembership === null) {
+    // Use shared helper with by_workspace_user composite index for O(1) auth check
+    const membership = await getUserMembership(ctx, args.workspaceId);
+    if (membership === null) {
       return [];
     }
 

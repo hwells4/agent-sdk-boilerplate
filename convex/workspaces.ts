@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
+import { getUserMembership } from "./lib/authorization";
 
 /**
  * Workspace CRUD operations
@@ -156,28 +157,13 @@ export const get = query({
     workspaceId: v.id("workspaces"),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (identity === null) {
-      return null;
-    }
-
     const workspace = await ctx.db.get(args.workspaceId);
     if (workspace === null) {
       return null;
     }
 
-    // Check if user has access (is owner or member)
-    if (workspace.ownerId === identity.subject) {
-      return workspace;
-    }
-
-    // Check membership
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
-      .filter((q) => q.eq(q.field("userId"), identity.subject))
-      .first();
-
+    // Use shared helper with by_workspace_user composite index for O(1) lookup
+    const membership = await getUserMembership(ctx, args.workspaceId);
     if (membership === null) {
       return null;
     }

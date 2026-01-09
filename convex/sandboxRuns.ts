@@ -128,19 +128,14 @@ export const create = mutation({
       throw new Error("Unauthenticated: must be logged in to create a sandbox run");
     }
 
-    // Verify workspace exists and user has access
+    // Verify workspace exists
     const workspace = await ctx.db.get(args.workspaceId);
     if (workspace === null) {
       throw new Error("Workspace not found");
     }
 
-    // Check membership
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
-      .filter((q) => q.eq(q.field("userId"), identity.subject))
-      .first();
-
+    // Check membership using shared helper with by_workspace_user composite index for O(1) lookup
+    const membership = await getUserMembership(ctx, args.workspaceId);
     if (membership === null) {
       throw new Error("Unauthorized: must be a workspace member to create sandbox runs");
     }
