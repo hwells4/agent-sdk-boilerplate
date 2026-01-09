@@ -48,3 +48,13 @@ export const MAX_ERROR_CODE_LENGTH = 50;
  */
 export const MAX_ERROR_DETAILS_LENGTH = 2000;
 
+/**
+ * Maximum length for user IDs
+ */
+export const MAX_USER_ID_LENGTH = 100;
+
+/**
+ * Maximum length for prompts
+ */
+export const MAX_PROMPT_LENGTH = 50000;
+

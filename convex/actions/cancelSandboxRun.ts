@@ -3,7 +3,7 @@
 import { v } from "convex/values";
 import { action } from "../_generated/server";
 import { internal } from "../_generated/api";
-import { Sandbox } from "@e2b/code-interpreter";
+import { killSandboxSafely } from "../lib/e2b";
 
 /**
  * Cancel a running sandbox run.
@@ -50,19 +50,13 @@ export const cancelSandboxRun = action({
       throw new Error("Unauthorized: must be a workspace member to cancel this sandbox run");
     }
 
-    // Step 4: Kill the E2B sandbox (if sandboxId exists)
-    // Note: sandbox.kill() may throw if sandbox is already dead - this is fine
-    if (sandboxRun.sandboxId) {
-      try {
-        const sandbox = await Sandbox.connect(sandboxRun.sandboxId);
-        await sandbox.kill();
-      } catch (sandboxError) {
-        // Sandbox may already be dead - this is fine, continue with status update
-        console.log(
-          `Sandbox ${sandboxRun.sandboxId} may already be terminated: ${sandboxError}`
-        );
-      }
+    // Only allow creator, admins, or owners to cancel
+    if (sandboxRun.createdBy !== identity.subject && membership.role === "member") {
+      throw new Error("Unauthorized: only the creator or workspace admins can cancel this sandbox run");
     }
+
+    // Step 4: Kill the E2B sandbox (handles already-dead sandboxes gracefully)
+    await killSandboxSafely(sandboxRun.sandboxId);
 
     // Step 5: Update the run status to 'canceled' with finishedAt
     // Use skipTerminalStates to gracefully handle sandboxes that completed

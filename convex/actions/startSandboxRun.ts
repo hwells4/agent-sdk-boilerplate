@@ -4,7 +4,7 @@ import { v } from "convex/values";
 import { action } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { Id } from "../_generated/dataModel";
-import { IDLE_TIMEOUT_MS } from "../lib/constants";
+import { IDLE_TIMEOUT_MS, MAX_PROMPT_LENGTH } from "../lib/constants";
 import { Sandbox } from "@e2b/code-interpreter";
 
 /**
@@ -46,6 +46,20 @@ export const startSandboxRun = action({
     });
     if (membership === null) {
       throw new Error("Unauthorized: must be a workspace member");
+    }
+
+    // Validate prompt length
+    if (args.prompt.length > MAX_PROMPT_LENGTH) {
+      throw new Error(`Prompt exceeds maximum length of ${MAX_PROMPT_LENGTH} characters`);
+    }
+
+    // Rate limit: max 10 sandboxes per minute per user
+    const recentCount = await ctx.runQuery(internal.sandboxRuns.internalCountRecentByUser, {
+      userId: identity.subject,
+      sinceMs: 60 * 1000,
+    });
+    if (recentCount >= 10) {
+      throw new Error("Rate limit exceeded: maximum 10 sandbox runs per minute");
     }
 
     const templateId = process.env.E2B_TEMPLATE_ID;

@@ -6,6 +6,7 @@ import {
   MAX_ERROR_MESSAGE_LENGTH,
   MAX_ERROR_CODE_LENGTH,
   MAX_ERROR_DETAILS_LENGTH,
+  MAX_USER_ID_LENGTH,
 } from "./constants";
 
 /**
@@ -55,6 +56,18 @@ export function validateTitle(value: string): void {
  */
 export function validateThreadId(value: string): void {
   validateStringLength(value, "Thread ID", MAX_THREAD_ID_LENGTH);
+}
+
+/**
+ * Validate user ID format and length
+ */
+export function validateUserId(value: string): void {
+  if (!value || value.length === 0) {
+    throw new Error("User ID cannot be empty");
+  }
+  if (value.length > MAX_USER_ID_LENGTH) {
+    throw new Error(`User ID exceeds maximum length of ${MAX_USER_ID_LENGTH} characters`);
+  }
 }
 
 /**

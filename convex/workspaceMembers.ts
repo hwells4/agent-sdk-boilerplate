@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation, query, internalQuery } from "./_generated/server";
 import { Id, Doc } from "./_generated/dataModel";
 import { getUserMembership, requireWorkspaceMembership } from "./lib/authorization";
+import { validateUserId } from "./lib/validators";
 
 /**
  * Add a member to a workspace
@@ -17,6 +18,9 @@ export const addMember = mutation({
     role: v.union(v.literal("admin"), v.literal("member")),
   },
   handler: async (ctx, args): Promise<Id<"workspaceMembers">> => {
+    // Validate userId format
+    validateUserId(args.userId);
+
     // Check if workspace exists
     const workspace = await ctx.db.get(args.workspaceId);
     if (workspace === null) {
@@ -66,6 +70,9 @@ export const removeMember = mutation({
     userId: v.string(),
   },
   handler: async (ctx, args): Promise<void> => {
+    // Validate userId format
+    validateUserId(args.userId);
+
     // Check if workspace exists
     const workspace = await ctx.db.get(args.workspaceId);
     if (workspace === null) {
@@ -115,6 +122,9 @@ export const updateRole = mutation({
     newRole: v.union(v.literal("admin"), v.literal("member")),
   },
   handler: async (ctx, args): Promise<void> => {
+    // Validate userId format
+    validateUserId(args.userId);
+
     // Check if workspace exists
     const workspace = await ctx.db.get(args.workspaceId);
     if (workspace === null) {

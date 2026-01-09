@@ -79,8 +79,10 @@ export const create = mutation({
 });
 
 /**
- * Create a new artifact (internal, bypasses auth for actions)
- * Used by actions that have already validated authorization
+ * Internal mutation - SECURITY CONTRACT:
+ * Caller MUST verify user has workspace membership before calling.
+ * Authorization is NOT checked within this function.
+ * @internal Only use from actions that have validated auth via internalGetMembership
  */
 export const internalCreate = internalMutation({
   args: {
@@ -216,45 +218,6 @@ export const listByRun = query({
       .withIndex("by_run", (q) => q.eq("sandboxRunId", args.sandboxRunId))
       .order("desc")
       .paginate(args.paginationOpts);
-  },
-});
-
-/**
- * Backfill workspaceId for existing artifacts that don't have it set.
- * Run this after schema migration to populate denormalized workspaceId field.
- * Processes in batches to avoid timeouts.
- *
- * @param batchSize - Number of artifacts to process per call (default: 100)
- * @returns Number of artifacts updated, or 0 if backfill is complete
- */
-export const backfillWorkspaceId = internalMutation({
-  args: {
-    batchSize: v.optional(v.number()),
-  },
-  handler: async (ctx, args): Promise<number> => {
-    const batchSize = args.batchSize ?? 100;
-
-    // Find artifacts without workspaceId (using type assertion since field is now required)
-    const artifacts = await ctx.db
-      .query("artifacts")
-      .take(batchSize);
-
-    let updated = 0;
-    for (const artifact of artifacts) {
-      // Check if workspaceId is missing (pre-migration artifacts)
-      // TypeScript thinks it's always present, but old data won't have it
-      if ((artifact as { workspaceId?: unknown }).workspaceId === undefined) {
-        const sandboxRun = await ctx.db.get(artifact.sandboxRunId);
-        if (sandboxRun) {
-          await ctx.db.patch(artifact._id, {
-            workspaceId: sandboxRun.workspaceId,
-          });
-          updated++;
-        }
-      }
-    }
-
-    return updated;
   },
 });
 

@@ -277,17 +277,17 @@ export const listByThread = query({
       return [];
     }
 
-    // Get all sandbox runs for this thread
-    const runs = await ctx.db
-      .query("sandboxRuns")
-      .withIndex("by_thread", (q) => q.eq("threadId", args.threadId))
-      .collect();
-
-    // Get user's workspace memberships to filter accessible runs
-    const memberships = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_user", (q) => q.eq("userId", identity.subject))
-      .collect();
+    // Get all sandbox runs for this thread and user's workspace memberships in parallel
+    const [runs, memberships] = await Promise.all([
+      ctx.db
+        .query("sandboxRuns")
+        .withIndex("by_thread", (q) => q.eq("threadId", args.threadId))
+        .collect(),
+      ctx.db
+        .query("workspaceMembers")
+        .withIndex("by_user", (q) => q.eq("userId", identity.subject))
+        .collect(),
+    ]);
 
     const memberWorkspaceIds = new Set(memberships.map((m) => m.workspaceId.toString()));
 
@@ -301,7 +301,11 @@ export const listByThread = query({
 // ============================================================================
 
 /**
- * Internal mutation to create a sandbox run (bypasses auth for action use)
+ * Internal mutation - SECURITY CONTRACT:
+ * Caller MUST verify user has workspace membership before calling.
+ * Authorization is NOT checked within this function.
+ * @internal Only use from actions that have validated auth via internalGetMembership
+ *
  * @param threadId - The thread this run is associated with
  * @param workspaceId - The workspace this run belongs to
  * @param createdBy - The user ID who created this run
@@ -344,7 +348,11 @@ export const internalCreate = internalMutation({
 });
 
 /**
- * Internal mutation to update a sandbox run (bypasses auth for action use)
+ * Internal mutation - SECURITY CONTRACT:
+ * Caller MUST verify user has workspace membership before calling.
+ * Authorization is NOT checked within this function.
+ * @internal Only use from actions that have validated auth via internalGetMembership
+ *
  * @param sandboxRunId - The ID of the sandbox run to update
  * @param sandboxId - Optional E2B sandbox ID
  * @param status - Optional new status (will be validated)
@@ -451,16 +459,14 @@ export const internalFindStuckBooting = internalQuery({
     const now = Date.now();
     const cutoffTime = now - args.maxBootMs;
 
-    // Get all booting sandboxes
-    const bootingSandboxes = await ctx.db
+    // Use composite index to efficiently find stuck booting sandboxes
+    // (mirrors pattern used in internalFindIdle with by_status_activity)
+    return await ctx.db
       .query("sandboxRuns")
-      .withIndex("by_status", (q) => q.eq("status", "booting"))
+      .withIndex("by_status_startedAt", (q) =>
+        q.eq("status", "booting").lt("startedAt", cutoffTime)
+      )
       .collect();
-
-    // Filter to sandboxes that have been booting too long
-    return bootingSandboxes.filter((run) => {
-      return run.startedAt < cutoffTime;
-    });
   },
 });
 
@@ -475,5 +481,28 @@ export const internalGet = internalQuery({
   },
   handler: async (ctx, args): Promise<Doc<"sandboxRuns"> | null> => {
     return await ctx.db.get(args.sandboxRunId);
+  },
+});
+
+/**
+ * Internal query to count recent sandbox runs by user for rate limiting
+ * Counts runs started within the given time window by a specific user
+ *
+ * @param userId - The user ID to count runs for
+ * @param sinceMs - Time window in milliseconds (e.g., 60000 for last minute)
+ * @returns Count of sandbox runs started by user within the time window
+ */
+export const internalCountRecentByUser = internalQuery({
+  args: {
+    userId: v.string(),
+    sinceMs: v.number(),
+  },
+  handler: async (ctx, args): Promise<number> => {
+    const cutoff = Date.now() - args.sinceMs;
+    const recentRuns = await ctx.db
+      .query("sandboxRuns")
+      .withIndex("by_status", (q) => q.eq("status", "running"))
+      .collect();
+    return recentRuns.filter(r => r.createdBy === args.userId && r.startedAt > cutoff).length;
   },
 });

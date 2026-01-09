@@ -146,13 +146,15 @@ export async function getArtifactAccess(
     return null;
   }
 
-  const sandboxRun = await ctx.db.get(artifact.sandboxRunId);
-  if (sandboxRun === null) {
+  // Use denormalized workspaceId directly (saves 1 DB query for authorization)
+  const membership = await getUserMembership(ctx, artifact.workspaceId);
+  if (membership === null) {
     return null;
   }
 
-  const membership = await getUserMembership(ctx, sandboxRun.workspaceId);
-  if (membership === null) {
+  // Fetch sandboxRun for return value (callers may need it)
+  const sandboxRun = await ctx.db.get(artifact.sandboxRunId);
+  if (sandboxRun === null) {
     return null;
   }
 

@@ -2,8 +2,8 @@
 
 import { internalAction } from "../_generated/server";
 import { internal } from "../_generated/api";
-import { Sandbox } from "@e2b/code-interpreter";
 import { IDLE_TIMEOUT_MS, BOOT_TIMEOUT_MS } from "../lib/constants";
+import { killSandboxSafely } from "../lib/e2b";
 import { Doc } from "../_generated/dataModel";
 
 /**
@@ -52,19 +52,8 @@ export const killIdleSandboxes = internalAction({
      * Process a single sandbox run - kill the sandbox and update status
      */
     const processRun = async (run: Doc<"sandboxRuns">): Promise<boolean> => {
-      // Connect to the sandbox and kill it if sandboxId exists
-      // Note: sandbox.kill() may throw if sandbox is already dead
-      if (run.sandboxId) {
-        try {
-          const sandbox = await Sandbox.connect(run.sandboxId);
-          await sandbox.kill();
-        } catch (sandboxError) {
-          // Sandbox may already be dead - this is fine, continue with status update
-          console.log(
-            `Sandbox ${run.sandboxId} may already be terminated: ${sandboxError}`
-          );
-        }
-      }
+      // Kill the sandbox (handles already-dead sandboxes gracefully)
+      await killSandboxSafely(run.sandboxId);
 
       // Update the run status to 'canceled' with finishedAt
       // Use skipTerminalStates to gracefully handle sandboxes that completed
