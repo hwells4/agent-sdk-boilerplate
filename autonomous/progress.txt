@@ -267,3 +267,17 @@
 - Files changed: convex/lib/authorization.ts (new)
 - Convex folder typechecks cleanly via `cd convex && npx tsc --noEmit`
 ---
+
+## 2026-01-08 - US-016
+- Added authorization to sandboxRuns mutations and queries
+- Changes:
+  - sandboxRuns.update: Now uses getSandboxRunAccess, throws if null
+  - sandboxRuns.get: Now uses getSandboxRunAccess, returns null if unauthorized
+  - sandboxRuns.listByWorkspace: Now uses getUserMembership, returns [] if null
+  - sandboxRuns.listByThread: Now checks auth and filters runs by user's workspace memberships
+  - Removed public findIdle query (security risk - exposed all running sandboxes)
+  - Only internalFindIdle remains for cron job use
+- Imported getUserMembership and getSandboxRunAccess from ./lib/authorization
+- Files changed: convex/sandboxRuns.ts
+- Convex folder typechecks cleanly via `cd convex && npx tsc --noEmit`
+---

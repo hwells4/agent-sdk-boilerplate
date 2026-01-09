@@ -257,7 +257,7 @@
         "npx tsc --noEmit passes"
       ],
       "priority": 16,
-      "passes": false,
+      "passes": true,
       "notes": "Phase 2 P1 Critical - Fix authorization bypass vulnerabilities in sandboxRuns. DEPENDS ON US-014."
     },
     {
