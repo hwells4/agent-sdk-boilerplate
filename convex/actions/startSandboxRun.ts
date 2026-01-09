@@ -104,7 +104,7 @@ export const startSandboxRun = action({
         error: {
           message: errorMessage,
           code: errorCode,
-          details: error instanceof Error ? error.stack : undefined,
+          details: undefined,
         },
       });
 

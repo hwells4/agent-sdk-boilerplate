@@ -45,15 +45,6 @@ export function validateTransition(from: SandboxStatus, to: SandboxStatus): bool
 }
 
 /**
- * Check if a status is a terminal state (no further transitions allowed)
- * @param status - The status to check
- * @returns true if the status is terminal
- */
-export function isTerminalStatus(status: SandboxStatus): boolean {
-  return VALID_TRANSITIONS[status].length === 0;
-}
-
-/**
  * Get a human-readable error message for an invalid transition
  * @param from - Current status
  * @param to - Proposed new status

@@ -1,52 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query, internalQuery } from "./_generated/server";
 import { Id, Doc } from "./_generated/dataModel";
-
-/**
- * Workspace Member CRUD operations
- *
- * All functions use ctx.auth for user identification.
- * Role validation: only owner/admin can add/remove members
- */
-
-// Helper type for roles
-type Role = "owner" | "admin" | "member";
-
-/**
- * Get the current user's membership in a workspace
- * Returns null if not a member
- */
-async function getUserMembership(
-  ctx: { db: any; auth: any },
-  workspaceId: Id<"workspaces">
-): Promise<{ role: Role } | null> {
-  const identity = await ctx.auth.getUserIdentity();
-  if (identity === null) {
-    return null;
-  }
-
-  const membership = await ctx.db
-    .query("workspaceMembers")
-    .withIndex("by_workspace", (q: any) => q.eq("workspaceId", workspaceId))
-    .filter((q: any) => q.eq(q.field("userId"), identity.subject))
-    .first();
-
-  return membership;
-}
-
-/**
- * Check if the current user can manage members (owner or admin)
- */
-async function canManageMembers(
-  ctx: { db: any; auth: any },
-  workspaceId: Id<"workspaces">
-): Promise<boolean> {
-  const membership = await getUserMembership(ctx, workspaceId);
-  if (membership === null) {
-    return false;
-  }
-  return membership.role === "owner" || membership.role === "admin";
-}
+import { requireWorkspaceMembership } from "./lib/authorization";
 
 /**
  * Add a member to a workspace
@@ -62,28 +17,18 @@ export const addMember = mutation({
     role: v.union(v.literal("admin"), v.literal("member")),
   },
   handler: async (ctx, args): Promise<Id<"workspaceMembers">> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (identity === null) {
-      throw new Error("Unauthenticated: must be logged in to add a member");
-    }
-
     // Check if workspace exists
     const workspace = await ctx.db.get(args.workspaceId);
     if (workspace === null) {
       throw new Error("Workspace not found");
     }
 
-    // Check if current user can manage members
-    if (!(await canManageMembers(ctx, args.workspaceId))) {
-      throw new Error("Unauthorized: only owner or admin can add members");
-    }
+    // Check if current user can manage members (owner or admin)
+    const currentMembership = await requireWorkspaceMembership(ctx, args.workspaceId, ["owner", "admin"]);
 
     // Restrict admin privilege escalation: only owners can add admins
-    if (args.role === "admin") {
-      const currentUserMembership = await getUserMembership(ctx, args.workspaceId);
-      if (currentUserMembership?.role !== "owner") {
-        throw new Error("Unauthorized: only owners can add admin members");
-      }
+    if (args.role === "admin" && currentMembership.role !== "owner") {
+      throw new Error("Unauthorized: only owners can add admin members");
     }
 
     // Check if user is already a member
@@ -120,21 +65,14 @@ export const removeMember = mutation({
     userId: v.string(),
   },
   handler: async (ctx, args): Promise<void> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (identity === null) {
-      throw new Error("Unauthenticated: must be logged in to remove a member");
-    }
-
     // Check if workspace exists
     const workspace = await ctx.db.get(args.workspaceId);
     if (workspace === null) {
       throw new Error("Workspace not found");
     }
 
-    // Check if current user can manage members
-    if (!(await canManageMembers(ctx, args.workspaceId))) {
-      throw new Error("Unauthorized: only owner or admin can remove members");
-    }
+    // Check if current user can manage members (owner or admin)
+    await requireWorkspaceMembership(ctx, args.workspaceId, ["owner", "admin"]);
 
     // Find the membership to remove
     const membership = await ctx.db
@@ -170,21 +108,14 @@ export const updateRole = mutation({
     newRole: v.union(v.literal("admin"), v.literal("member")),
   },
   handler: async (ctx, args): Promise<void> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (identity === null) {
-      throw new Error("Unauthenticated: must be logged in to update a role");
-    }
-
     // Check if workspace exists
     const workspace = await ctx.db.get(args.workspaceId);
     if (workspace === null) {
       throw new Error("Workspace not found");
     }
 
-    // Check if current user can manage members
-    if (!(await canManageMembers(ctx, args.workspaceId))) {
-      throw new Error("Unauthorized: only owner or admin can update roles");
-    }
+    // Check if current user can manage members (owner or admin)
+    await requireWorkspaceMembership(ctx, args.workspaceId, ["owner", "admin"]);
 
     // Find the membership to update
     const membership = await ctx.db
