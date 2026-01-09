@@ -72,7 +72,7 @@ export const removeMember = mutation({
     }
 
     // Check if current user can manage members (owner or admin)
-    await requireWorkspaceMembership(ctx, args.workspaceId, ["owner", "admin"]);
+    const currentMembership = await requireWorkspaceMembership(ctx, args.workspaceId, ["owner", "admin"]);
 
     // Find the membership to remove
     const membership = await ctx.db
@@ -88,6 +88,11 @@ export const removeMember = mutation({
     // Cannot remove the owner
     if (membership.role === "owner") {
       throw new Error("Cannot remove the workspace owner");
+    }
+
+    // Only owners can remove admin members
+    if (membership.role === "admin" && currentMembership.role !== "owner") {
+      throw new Error("Unauthorized: only owners can remove admin members");
     }
 
     // Delete the membership
@@ -115,7 +120,7 @@ export const updateRole = mutation({
     }
 
     // Check if current user can manage members (owner or admin)
-    await requireWorkspaceMembership(ctx, args.workspaceId, ["owner", "admin"]);
+    const currentMembership = await requireWorkspaceMembership(ctx, args.workspaceId, ["owner", "admin"]);
 
     // Find the membership to update
     const membership = await ctx.db
@@ -131,6 +136,12 @@ export const updateRole = mutation({
     // Cannot change the owner's role
     if (membership.role === "owner") {
       throw new Error("Cannot change the workspace owner's role");
+    }
+
+    // Only owners can change admin privileges (promote to admin or demote from admin)
+    const involvesAdminRole = membership.role === "admin" || args.newRole === "admin";
+    if (involvesAdminRole && currentMembership.role !== "owner") {
+      throw new Error("Unauthorized: only owners can change admin privileges");
     }
 
     // Update the role
