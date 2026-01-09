@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { Infer, v } from "convex/values";
 
 /**
  * Shared validators for Convex schema and mutations
@@ -16,6 +16,9 @@ export const sandboxStatusValidator = v.union(
   v.literal("failed"),
   v.literal("canceled")
 );
+
+/** Type inferred from sandboxStatusValidator */
+export type SandboxStatus = Infer<typeof sandboxStatusValidator>;
 
 /**
  * Artifact type validator
@@ -48,3 +51,6 @@ export const memberRoleValidator = v.union(
   v.literal("admin"),
   v.literal("member")
 );
+
+/** Type inferred from memberRoleValidator */
+export type MemberRole = Infer<typeof memberRoleValidator>;

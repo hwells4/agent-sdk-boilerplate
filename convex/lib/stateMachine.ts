@@ -12,15 +12,10 @@
  * - running -> canceled (user canceled or idle timeout)
  */
 
-/**
- * All possible sandbox run statuses
- */
-export type SandboxStatus =
-  | "booting"
-  | "running"
-  | "succeeded"
-  | "failed"
-  | "canceled";
+import { SandboxStatus } from "./validators";
+
+// Re-export for consumers that expect the type from this module
+export type { SandboxStatus };
 
 /**
  * Valid status transitions as a map from current status to allowed next statuses

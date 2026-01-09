@@ -1,5 +1,6 @@
 import { Doc, Id } from "../_generated/dataModel";
 import { QueryCtx, MutationCtx } from "../_generated/server";
+import { MemberRole } from "./validators";
 
 /**
  * Shared authorization helpers for Convex functions
@@ -8,8 +9,8 @@ import { QueryCtx, MutationCtx } from "../_generated/server";
  * using proper TypeScript types and efficient index-based lookups.
  */
 
-/** Role type for workspace members */
-export type MemberRole = "owner" | "admin" | "member";
+// Re-export for consumers that expect the type from this module
+export type { MemberRole };
 
 /** Context type that includes both query and mutation contexts */
 type AuthContext = QueryCtx | MutationCtx;
@@ -71,7 +72,7 @@ export async function requireWorkspaceMembership(
   }
 
   if (requiredRoles && requiredRoles.length > 0) {
-    if (!requiredRoles.includes(membership.role as MemberRole)) {
+    if (!requiredRoles.includes(membership.role)) {
       throw new Error(
         `Unauthorized: requires one of these roles: ${requiredRoles.join(", ")}`
       );

@@ -20,7 +20,7 @@ import { sandboxStatusValidator } from "./lib/validators";
  */
 type SandboxRunUpdateArgs = {
   sandboxId?: string;
-  status?: "booting" | "running" | "succeeded" | "failed" | "canceled";
+  status?: SandboxStatus;
   finishedAt?: number;
   lastActivityAt?: number;
   e2bCost?: number;
@@ -67,13 +67,10 @@ async function performSandboxRunUpdate(
 
   // Validate status transition if status is being changed
   if (args.status !== undefined && args.status !== currentRun.status) {
-    const isValid = validateTransition(
-      currentRun.status as SandboxStatus,
-      args.status as SandboxStatus
-    );
+    const isValid = validateTransition(currentRun.status, args.status);
     if (!isValid) {
       // Check if we should silently skip for terminal states
-      const isTerminal = VALID_TRANSITIONS[currentRun.status as SandboxStatus].length === 0;
+      const isTerminal = VALID_TRANSITIONS[currentRun.status].length === 0;
       if (options.skipTerminalStates && isTerminal) {
         return {
           updated: false,
@@ -81,12 +78,7 @@ async function performSandboxRunUpdate(
           reason: `Sandbox already in terminal state '${currentRun.status}'`,
         };
       }
-      throw new Error(
-        getTransitionError(
-          currentRun.status as SandboxStatus,
-          args.status as SandboxStatus
-        )
-      );
+      throw new Error(getTransitionError(currentRun.status, args.status));
     }
   }
 
