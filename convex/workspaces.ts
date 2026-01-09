@@ -106,40 +106,42 @@ export const remove = mutation({
       throw new Error("Unauthorized: only the workspace owner can delete it");
     }
 
-    // 1. Get all sandboxRuns for this workspace
-    const sandboxRuns = await ctx.db
-      .query("sandboxRuns")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
-      .collect();
+    // Use Promise.all for batch deletions to avoid timeout on large workspaces
+    // Queries can run in parallel, deletes must respect order (children before parents)
 
-    // 2. Delete all artifacts for each sandboxRun, then delete the sandboxRun
-    for (const run of sandboxRuns) {
-      // Get all artifacts for this run
-      const artifacts = await ctx.db
-        .query("artifacts")
-        .withIndex("by_run", (q) => q.eq("sandboxRunId", run._id))
-        .collect();
+    // 1. Query all related data in parallel
+    const [sandboxRuns, members] = await Promise.all([
+      ctx.db
+        .query("sandboxRuns")
+        .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
+        .collect(),
+      ctx.db
+        .query("workspaceMembers")
+        .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
+        .collect(),
+    ]);
 
-      // Delete all artifacts for this run
-      for (const artifact of artifacts) {
-        await ctx.db.delete(artifact._id);
-      }
+    // 2. Query all artifacts in parallel (one query per run)
+    const artifactsByRun = await Promise.all(
+      sandboxRuns.map((run) =>
+        ctx.db
+          .query("artifacts")
+          .withIndex("by_run", (q) => q.eq("sandboxRunId", run._id))
+          .collect()
+      )
+    );
 
-      // Delete the sandboxRun
-      await ctx.db.delete(run._id);
-    }
+    // 3. Delete all artifacts in parallel (must complete before deleting runs)
+    const allArtifacts = artifactsByRun.flat();
+    await Promise.all(allArtifacts.map((artifact) => ctx.db.delete(artifact._id)));
 
-    // 3. Delete all workspace members
-    const members = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
-      .collect();
+    // 4. Delete all sandboxRuns in parallel (must complete before deleting workspace)
+    await Promise.all(sandboxRuns.map((run) => ctx.db.delete(run._id)));
 
-    for (const member of members) {
-      await ctx.db.delete(member._id);
-    }
+    // 5. Delete all workspace members in parallel
+    await Promise.all(members.map((member) => ctx.db.delete(member._id)));
 
-    // 4. Delete the workspace
+    // 6. Delete the workspace
     await ctx.db.delete(args.workspaceId);
   },
 });
