@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as actions_cancelSandboxRun from "../actions/cancelSandboxRun.js";
 import type * as actions_killIdleSandboxes from "../actions/killIdleSandboxes.js";
 import type * as actions_startSandboxRun from "../actions/startSandboxRun.js";
 import type * as artifacts from "../artifacts.js";
@@ -27,6 +28,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  "actions/cancelSandboxRun": typeof actions_cancelSandboxRun;
   "actions/killIdleSandboxes": typeof actions_killIdleSandboxes;
   "actions/startSandboxRun": typeof actions_startSandboxRun;
   artifacts: typeof artifacts;

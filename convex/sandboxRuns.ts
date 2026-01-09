@@ -462,3 +462,17 @@ export const internalFindStuckBooting = internalQuery({
     });
   },
 });
+
+/**
+ * Internal query to get a sandbox run by ID (for use by actions)
+ * @param sandboxRunId - The ID of the sandbox run
+ * @returns The sandbox run or null if not found
+ */
+export const internalGet = internalQuery({
+  args: {
+    sandboxRunId: v.id("sandboxRuns"),
+  },
+  handler: async (ctx, args): Promise<Doc<"sandboxRuns"> | null> => {
+    return await ctx.db.get(args.sandboxRunId);
+  },
+});
