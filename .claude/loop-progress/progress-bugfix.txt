@@ -13,6 +13,7 @@ Verify: (none)
 - FK validation in internal mutations: Always validate referenced entities exist before insert, include ID in error message
 - Consistency validation: When denormalizing, validate that child entity's FK matches parent entity's expected value
 - Privilege escalation prevention: For role changes that involve admin privileges, require owner role (not just admin)
+- Batch operations for cascade deletion: Use Promise.all with proper ordering (children before parents) to avoid timeout
 
 ---
 
@@ -67,5 +68,20 @@ Verify: (none)
 - Security: Only owners can change admin privileges (promote to admin, demote from admin, or remove admin)
 - Pattern: Capture `requireWorkspaceMembership` return value to check caller's role for secondary authorization
 - Error messages follow existing pattern: "Unauthorized: only owners can..."
+---
+
+## 2026-01-09 - claude-agent-sdk-experiments-176
+- Fixed cascade deletion timeout by batching operations with Promise.all
+- Files changed:
+  - `convex/workspaces.ts`: Refactored `remove` mutation to use parallel queries and deletes
+- Strategy:
+  1. Query sandboxRuns and members in parallel
+  2. Query artifacts per run in parallel
+  3. Delete all artifacts in parallel (step completes before next)
+  4. Delete all sandboxRuns in parallel
+  5. Delete all members in parallel
+  6. Delete workspace
+- Learnings: Promise.all for batch deletes maintains order when awaited sequentially between steps
+- Performance: O(4) round-trips instead of O(runs + artifacts + members) for large workspaces
 ---
 
