@@ -346,3 +346,17 @@
 - Convex folder typechecks cleanly via `cd convex && npx tsc --noEmit`
 - Pattern: Batch parallelization with Promise.allSettled provides efficient processing while handling errors gracefully
 ---
+
+## 2026-01-08 - US-021
+- Restricted admin privilege escalation in workspaceMembers.addMember mutation
+- Changes to convex/workspaceMembers.ts:
+  - Added check: if args.role === "admin", verify current user is owner
+  - Only workspace owners can add members with admin role
+  - Admins can still add members with 'member' role
+  - Throws "Unauthorized: only owners can add admin members" if admin tries to add admin
+- Check happens after canManageMembers but before checking if user already exists
+- Uses existing getUserMembership helper to fetch current user's role
+- Files changed: convex/workspaceMembers.ts
+- Convex folder typechecks cleanly via `cd convex && npx tsc --noEmit`
+- Security: Prevents admin proliferation where admins could create more admins
+---

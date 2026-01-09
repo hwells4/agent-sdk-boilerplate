@@ -337,7 +337,7 @@
         "npx tsc --noEmit passes"
       ],
       "priority": 21,
-      "passes": false,
+      "passes": true,
       "notes": "Phase 3 P2 Important - Prevent admin proliferation"
     },
     {
