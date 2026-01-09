@@ -120,3 +120,12 @@ Verify: (none)
 - Performance: Database now returns only relevant results instead of all running sandboxes
 ---
 
+## 2026-01-09 - claude-agent-sdk-experiments-7ip
+- Removed unused DEFAULT_MAX_DURATION_MS constant and replaced hardcoded idle timeout with shared constant
+- Files changed:
+  - `convex/lib/constants.ts`: Removed unused DEFAULT_MAX_DURATION_MS constant
+  - `convex/actions/startSandboxRun.ts`: Import and use IDLE_TIMEOUT_MS instead of hardcoded value
+- Learnings: Keep constants.ts lean - only export constants that are actually used
+- Benefits: Single source of truth for timeout values, easier to modify across codebase
+---
+
