@@ -18,5 +18,8 @@
     "deny": [
       "Bash(rm -rf:*)"
     ]
+  },
+  "enabledPlugins": {
+    "loop-agents@loop-agents-marketplace": true
   }
 }
