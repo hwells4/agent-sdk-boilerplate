@@ -10,6 +10,8 @@ Verify: (none)
 - Composite indexes: Use `.index("name", [field1, field2])` for queries filtering on multiple fields
 - Race condition prevention: Re-fetch document state immediately before update, not at authorization check time
 - Graceful terminal state handling: Use `skipTerminalStates` option for cron jobs that may race with normal completion
+- FK validation in internal mutations: Always validate referenced entities exist before insert, include ID in error message
+- Consistency validation: When denormalizing, validate that child entity's FK matches parent entity's expected value
 
 ---
 
@@ -44,5 +46,15 @@ Verify: (none)
   - `convex/actions/killIdleSandboxes.ts`: Use `skipTerminalStates: true`, track skipped count in logs
 - Learnings: Authorization checks may stale-read document state; always re-fetch before state-dependent operations
 - Gotchas: Cron job queries can return sandboxes that complete between query and update - handle with `skipTerminalStates`
+---
+
+## 2026-01-09 - claude-agent-sdk-experiments-i8i
+- Added FK validation to internal mutations to prevent orphaned records
+- Files changed:
+  - `convex/sandboxRuns.ts`: Added workspace existence check in `internalCreate`
+  - `convex/artifacts.ts`: Added sandbox run and workspace existence checks in `internalCreate`
+  - `convex/artifacts.ts`: Added workspace consistency check (sandbox run must belong to specified workspace)
+- Learnings: Internal mutations bypass auth but still need data integrity checks
+- Error messages include the invalid ID for debugging: `Workspace not found: ${args.workspaceId}`
 ---
 
