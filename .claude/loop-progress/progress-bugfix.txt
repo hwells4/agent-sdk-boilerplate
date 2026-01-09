@@ -12,6 +12,7 @@ Verify: (none)
 - Graceful terminal state handling: Use `skipTerminalStates` option for cron jobs that may race with normal completion
 - FK validation in internal mutations: Always validate referenced entities exist before insert, include ID in error message
 - Consistency validation: When denormalizing, validate that child entity's FK matches parent entity's expected value
+- Privilege escalation prevention: For role changes that involve admin privileges, require owner role (not just admin)
 
 ---
 
@@ -56,5 +57,15 @@ Verify: (none)
   - `convex/artifacts.ts`: Added workspace consistency check (sandbox run must belong to specified workspace)
 - Learnings: Internal mutations bypass auth but still need data integrity checks
 - Error messages include the invalid ID for debugging: `Workspace not found: ${args.workspaceId}`
+---
+
+## 2026-01-09 - claude-agent-sdk-experiments-94t
+- Fixed admin role escalation vulnerability in workspaceMembers.ts
+- Files changed:
+  - `convex/workspaceMembers.ts`: updateRole now requires owner for admin promotion/demotion
+  - `convex/workspaceMembers.ts`: removeMember now requires owner to remove admin members
+- Security: Only owners can change admin privileges (promote to admin, demote from admin, or remove admin)
+- Pattern: Capture `requireWorkspaceMembership` return value to check caller's role for secondary authorization
+- Error messages follow existing pattern: "Unauthorized: only owners can..."
 ---
 
