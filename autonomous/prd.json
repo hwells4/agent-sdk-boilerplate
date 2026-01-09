@@ -291,7 +291,7 @@
         "npx tsc --noEmit passes"
       ],
       "priority": 18,
-      "passes": false,
+      "passes": true,
       "notes": "Phase 2 P1 Critical - Prevent unauthorized users from creating sandbox runs. DEPENDS ON US-015, US-022."
     },
     {
@@ -352,7 +352,7 @@
         "npx tsc --noEmit passes"
       ],
       "priority": 22,
-      "passes": false,
+      "passes": true,
       "notes": "Phase 3 P2 Important - Required by US-018 for action authorization. DEPENDS ON US-015."
     },
     {

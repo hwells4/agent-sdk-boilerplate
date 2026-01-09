@@ -1,6 +1,6 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
-import { Id } from "./_generated/dataModel";
+import { mutation, query, internalQuery } from "./_generated/server";
+import { Id, Doc } from "./_generated/dataModel";
 
 /**
  * Workspace Member CRUD operations
@@ -275,5 +275,29 @@ export const getUserWorkspaces = query({
     }
 
     return workspacesWithRole;
+  },
+});
+
+/**
+ * Internal query to get a user's membership in a workspace
+ * Used by actions to check authorization without ctx.auth
+ * @param workspaceId - The ID of the workspace
+ * @param userId - The user ID to check
+ * @returns The membership document or null
+ */
+export const internalGetMembership = internalQuery({
+  args: {
+    workspaceId: v.id("workspaces"),
+    userId: v.string(),
+  },
+  handler: async (ctx, args): Promise<Doc<"workspaceMembers"> | null> => {
+    const membership = await ctx.db
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", args.workspaceId).eq("userId", args.userId)
+      )
+      .first();
+
+    return membership;
   },
 });

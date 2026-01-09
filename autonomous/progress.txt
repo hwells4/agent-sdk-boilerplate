@@ -297,3 +297,21 @@
 - Files changed: convex/artifacts.ts
 - Convex folder typechecks cleanly via `cd convex && npx tsc --noEmit`
 ---
+
+## 2026-01-08 - US-018 (also completes US-022)
+- Added workspace membership check to startSandboxRun action
+- Changes to convex/actions/startSandboxRun.ts:
+  - Added call to internal.workspaceMembers.internalGetMembership BEFORE creating sandbox run
+  - Throws "Unauthorized: must be a workspace member" if membership is null
+  - Check happens before any database records are created
+- Added internalGetMembership query to convex/workspaceMembers.ts (satisfies US-022):
+  - Uses internalQuery (not public query)
+  - Takes workspaceId (Id<"workspaces">) and userId (string) as arguments
+  - Returns Doc<"workspaceMembers"> or null
+  - Uses by_workspace_user composite index for O(1) lookup
+  - Imported internalQuery from ./_generated/server
+  - Imported Doc from ./_generated/dataModel
+- Files changed: convex/workspaceMembers.ts, convex/actions/startSandboxRun.ts
+- Convex folder typechecks cleanly via `cd convex && npx tsc --noEmit`
+- Security: Prevents unauthorized users from creating sandbox runs (critical P1 fix)
+---

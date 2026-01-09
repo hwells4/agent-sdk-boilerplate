@@ -38,6 +38,15 @@ export const startSandboxRun = action({
       throw new Error("Unauthenticated: must be logged in to start a sandbox run");
     }
 
+    // Check workspace membership BEFORE creating any records
+    const membership = await ctx.runQuery(internal.workspaceMembers.internalGetMembership, {
+      workspaceId: args.workspaceId,
+      userId: identity.subject,
+    });
+    if (membership === null) {
+      throw new Error("Unauthorized: must be a workspace member");
+    }
+
     const templateId = process.env.E2B_TEMPLATE_ID;
     if (!templateId) {
       throw new Error("E2B_TEMPLATE_ID environment variable is not set");
