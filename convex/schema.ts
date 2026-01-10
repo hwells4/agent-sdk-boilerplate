@@ -54,6 +54,28 @@ export default defineSchema({
         details: v.optional(v.string()),
       })
     ),
+    // Cost tracking fields (added for SDK integration)
+    cost: v.optional(
+      v.object({
+        claudeCost: v.number(),
+        e2bCost: v.number(),
+        totalCost: v.number(),
+      })
+    ),
+    tokenUsage: v.optional(
+      v.object({
+        inputTokens: v.number(),
+        outputTokens: v.number(),
+        cachedTokens: v.optional(v.number()),
+      })
+    ),
+    durationMs: v.optional(v.number()),
+    // Observability link
+    braintrustTraceId: v.optional(v.string()),
+    // Result storage (truncated)
+    result: v.optional(v.string()),
+    // Prompt for reference
+    prompt: v.optional(v.string()),
   })
     .index("by_thread", ["threadId"])
     .index("by_thread_workspace", ["threadId", "workspaceId"])

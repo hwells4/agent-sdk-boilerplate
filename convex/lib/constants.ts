@@ -1,16 +1,21 @@
 /**
  * Shared constants for sandbox management
+ *
+ * NOTE: Timeout values are synced with examples/lib/constants.ts TIMEOUTS object.
+ * When changing these values, update both files to maintain consistency.
  */
 
 /**
  * Idle timeout in milliseconds (15 minutes)
  * Sandboxes with no activity for this duration will be killed by the cron job
+ * Synced with: TIMEOUTS.IDLE_CLEANUP_TIMEOUT in examples/lib/constants.ts
  */
 export const IDLE_TIMEOUT_MS = 15 * 60 * 1000;
 
 /**
  * Boot timeout in milliseconds (5 minutes)
  * Sandboxes stuck in 'booting' state for this duration will be canceled
+ * Synced with: TIMEOUTS.BOOT_CLEANUP_TIMEOUT in examples/lib/constants.ts
  */
 export const BOOT_TIMEOUT_MS = 5 * 60 * 1000;
 

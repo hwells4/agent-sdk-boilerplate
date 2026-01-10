@@ -28,10 +28,35 @@ const CLAUDE_PRICING: Record<string, {
 // E2B pricing
 const E2B_VCPU_PRICE_PER_SECOND = 0.000014 // $0.000014 per vCPU per second
 
+/**
+ * Unified token usage interface (camelCase).
+ * This is the canonical format used throughout the SDK.
+ */
 export interface TokenUsage {
   promptTokens: number
   completionTokens: number
   cachedTokens?: number
+}
+
+/**
+ * Token usage as returned by Python/Claude API (snake_case).
+ * Used for parsing JSON output from sandbox.
+ */
+export interface RawTokenUsage {
+  input_tokens: number
+  output_tokens: number
+  cache_read_input_tokens?: number
+}
+
+/**
+ * Convert Python snake_case token usage to TypeScript camelCase.
+ */
+export function convertTokenUsage(raw: RawTokenUsage): TokenUsage {
+  return {
+    promptTokens: raw.input_tokens,
+    completionTokens: raw.output_tokens,
+    cachedTokens: raw.cache_read_input_tokens,
+  }
 }
 
 export interface E2BUsage {

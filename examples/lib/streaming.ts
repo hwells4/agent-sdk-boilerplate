@@ -5,14 +5,11 @@
  * agent responses streamed from E2B sandboxes.
  */
 
-/**
- * Token usage information from Claude API
- */
-export interface TokenUsage {
-  input_tokens: number
-  output_tokens: number
-  cache_read_input_tokens: number
-}
+import type { RawTokenUsage } from './cost-tracking'
+
+// Re-export RawTokenUsage as TokenUsage for backward compatibility with streaming events
+// Streaming events use snake_case (from Python), while cost-tracking uses camelCase
+export type TokenUsage = RawTokenUsage
 
 /**
  * Stream event types emitted by Python agents (discriminated union)

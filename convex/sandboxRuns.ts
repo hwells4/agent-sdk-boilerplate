@@ -30,6 +30,13 @@ type SandboxRunUpdateArgs = {
   finishedAt?: number;
   lastActivityAt?: number;
   error?: { message: string; code?: string; details?: string };
+  // Cost tracking fields
+  cost?: { claudeCost: number; e2bCost: number; totalCost: number };
+  tokenUsage?: { inputTokens: number; outputTokens: number; cachedTokens?: number };
+  durationMs?: number;
+  braintrustTraceId?: string;
+  result?: string;
+  prompt?: string;
 };
 
 /**
@@ -95,6 +102,13 @@ async function performSandboxRunUpdate(
       finishedAt: args.finishedAt,
       lastActivityAt: args.lastActivityAt,
       error: args.error,
+      // Cost tracking fields
+      cost: args.cost,
+      tokenUsage: args.tokenUsage,
+      durationMs: args.durationMs,
+      braintrustTraceId: args.braintrustTraceId,
+      result: args.result,
+      prompt: args.prompt,
     }).filter(([_, value]) => value !== undefined)
   );
 
@@ -325,6 +339,8 @@ export const internalCreate = internalMutation({
     createdBy: v.string(),
     maxDurationMs: v.optional(v.number()),
     idleTimeoutMs: v.optional(v.number()),
+    prompt: v.optional(v.string()),
+    braintrustTraceId: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<Id<"sandboxRuns">> => {
     // Validate input lengths first (fail fast before DB queries)
@@ -346,6 +362,8 @@ export const internalCreate = internalMutation({
       lastActivityAt: now,
       maxDurationMs: args.maxDurationMs,
       idleTimeoutMs: args.idleTimeoutMs,
+      prompt: args.prompt,
+      braintrustTraceId: args.braintrustTraceId,
     });
 
     return sandboxRunId;
@@ -381,6 +399,25 @@ export const internalUpdate = internalMutation({
         details: v.optional(v.string()),
       })
     ),
+    // Cost tracking fields
+    cost: v.optional(
+      v.object({
+        claudeCost: v.number(),
+        e2bCost: v.number(),
+        totalCost: v.number(),
+      })
+    ),
+    tokenUsage: v.optional(
+      v.object({
+        inputTokens: v.number(),
+        outputTokens: v.number(),
+        cachedTokens: v.optional(v.number()),
+      })
+    ),
+    durationMs: v.optional(v.number()),
+    braintrustTraceId: v.optional(v.string()),
+    result: v.optional(v.string()),
+    prompt: v.optional(v.string()),
     skipTerminalStates: v.optional(v.boolean()),
   },
   handler: async (ctx, args): Promise<{ updated: boolean; skipped: boolean; reason?: string }> => {
@@ -399,6 +436,12 @@ export const internalUpdate = internalMutation({
         finishedAt: args.finishedAt,
         lastActivityAt: args.lastActivityAt,
         error: args.error,
+        cost: args.cost,
+        tokenUsage: args.tokenUsage,
+        durationMs: args.durationMs,
+        braintrustTraceId: args.braintrustTraceId,
+        result: args.result,
+        prompt: args.prompt,
       },
       { skipTerminalStates: args.skipTerminalStates ?? false }
     );

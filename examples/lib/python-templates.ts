@@ -12,6 +12,8 @@
  * - session: Emits tool events and supports conversation context (executeTurn)
  */
 
+import { DEFAULT_ALLOWED_TOOLS as ALLOWED_TOOLS_FROM_CONSTANTS } from './constants'
+
 /**
  * Options for Python agent code generation.
  */
@@ -48,17 +50,9 @@ export interface PythonAgentOptions {
 
 /**
  * Default allowed tools for Claude agent execution.
+ * Re-exported from constants.ts for backward compatibility.
  */
-export const DEFAULT_ALLOWED_TOOLS = [
-  'Read',
-  'Write',
-  'Edit',
-  'Bash',
-  'Glob',
-  'Grep',
-  'WebFetch',
-  'WebSearch',
-]
+export const DEFAULT_ALLOWED_TOOLS = ALLOWED_TOOLS_FROM_CONSTANTS
 
 /**
  * Generate the common Python imports for Claude agent code.

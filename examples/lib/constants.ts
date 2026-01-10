@@ -87,6 +87,12 @@ export const TIMEOUTS = {
   DEFAULT_SANDBOX_TIMEOUT: 120_000,
   /** Maximum allowed sandbox timeout (10 minutes) */
   MAX_SANDBOX_TIMEOUT: 600_000,
+  /** Idle timeout for cleanup (15 minutes) - synced with convex/lib/constants.ts */
+  IDLE_CLEANUP_TIMEOUT: 15 * 60 * 1000,
+  /** Boot timeout for cleanup (5 minutes) - synced with convex/lib/constants.ts */
+  BOOT_CLEANUP_TIMEOUT: 5 * 60 * 1000,
+  /** Heartbeat interval for long-running tasks (30 seconds) */
+  HEARTBEAT_INTERVAL: 30_000,
 } as const
 
 // ============================================================================
@@ -101,4 +107,21 @@ export const E2B_DEFAULTS = {
   CPU_COUNT: 2,
   /** Default memory in GB */
   MEMORY_GB: 4,
+} as const
+
+// ============================================================================
+// String Length Limits (for Convex storage)
+// ============================================================================
+
+/**
+ * String length limits for Convex storage.
+ * Values synced with convex/lib/constants.ts
+ */
+export const STRING_LIMITS = {
+  /** Maximum length for result storage */
+  MAX_RESULT_LENGTH: 10_000,
+  /** Maximum length for prompt storage */
+  MAX_PROMPT_LENGTH: 50_000,
+  /** Maximum length for error messages */
+  MAX_ERROR_MESSAGE_LENGTH: 1_000,
 } as const
