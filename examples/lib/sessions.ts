@@ -16,6 +16,14 @@ import { v4 as uuidv4 } from 'uuid'
 import { Sandbox } from '@e2b/code-interpreter'
 import { getBraintrustLogger, BraintrustSpan } from './observability'
 import { AgentConfig } from './agent'
+import {
+  ConvexConfig,
+  createSandboxRunRecord,
+  markSandboxRunning,
+  markSandboxSucceeded,
+  markSandboxFailed,
+  updateLastActivity,
+} from './convex-integration'
 
 // Session TTL and cleanup configuration
 const SESSION_TTL_MS = 30 * 60 * 1000  // 30 minutes
@@ -30,6 +38,16 @@ export interface ConversationSession {
   lastActivityAt: number  // Timestamp for TTL tracking
   turnCount: number
   conversationHistory: Array<{turnId: number, prompt: string, response: string}>
+  // Convex integration (managed mode)
+  convex?: ConvexConfig
+  sandboxRunId?: string
+}
+
+export interface SessionConfig {
+  /** Sandbox timeout in seconds (default: 600 = 10 minutes) */
+  timeout?: number
+  /** Optional Convex integration for managed mode with lifecycle tracking */
+  convex?: ConvexConfig
 }
 
 export interface SessionHooks {
@@ -64,11 +82,13 @@ setInterval(async () => {
  * This creates:
  * - A conversation-level trace in Braintrust
  * - A persistent E2B sandbox for the session (keeps context across turns)
+ * - Optionally a Convex sandbox run record for lifecycle tracking
  *
- * @param timeout - Sandbox timeout in seconds (default: 600 = 10 minutes)
+ * @param config - Session configuration (timeout, convex integration)
  * @returns New session object
  */
-export async function createSession(timeout: number = 600): Promise<ConversationSession> {
+export async function createSession(config: SessionConfig = {}): Promise<ConversationSession> {
+  const { timeout = 600, convex } = config
   const now = Date.now()
   const session: ConversationSession = {
     sessionId: uuidv4(),
@@ -76,6 +96,7 @@ export async function createSession(timeout: number = 600): Promise<Conversation
     lastActivityAt: now,
     turnCount: 0,
     conversationHistory: [],
+    convex,
   }
 
   const logger = getBraintrustLogger()
@@ -92,6 +113,20 @@ export async function createSession(timeout: number = 600): Promise<Conversation
     session.traceId = span.id
   }
 
+  // Create Convex sandbox run record if configured (managed mode)
+  if (convex) {
+    try {
+      session.sandboxRunId = await createSandboxRunRecord(
+        convex,
+        `[Multi-turn session] ${session.sessionId}`,
+        session.traceId
+      )
+    } catch (err) {
+      // Log but don't fail - Convex issues shouldn't block session creation
+      console.error('[Convex] Failed to create sandbox run record:', err)
+    }
+  }
+
   // Create persistent sandbox for this session
   const templateId = process.env.E2B_TEMPLATE_ID
   if (!templateId) {
@@ -102,9 +137,16 @@ export async function createSession(timeout: number = 600): Promise<Conversation
     timeoutMs: timeout * 1000,
     metadata: {
       sessionId: session.sessionId,
-      traceId: session.traceId,
+      ...(session.traceId && { traceId: session.traceId }),
     },
   })
+
+  // Mark sandbox as running in Convex (with sandbox ID for cleanup)
+  if (convex && session.sandboxRunId && session.sandbox) {
+    markSandboxRunning(convex, session.sandboxRunId, session.sandbox.sandboxId).catch((err) => {
+      console.error('[Convex] Failed to mark sandbox running:', err)
+    })
+  }
 
   activeSessions.set(session.sessionId, session)
   return session
@@ -142,6 +184,13 @@ export async function executeTurn(
 
   // Update last activity time for TTL tracking
   session.lastActivityAt = Date.now()
+
+  // Update activity in Convex to prevent cron cleanup
+  if (session.convex && session.sandboxRunId) {
+    updateLastActivity(session.convex, session.sandboxRunId).catch((err) => {
+      console.error('[Convex] Failed to update activity:', err)
+    })
+  }
 
   session.turnCount++
   const turnId = session.turnCount
@@ -354,16 +403,34 @@ asyncio.run(main())
  * - Logs final conversation metadata
  * - Kills the persistent sandbox
  * - Ends the Braintrust span
+ * - Marks Convex record as succeeded
  *
  * @param sessionId - Session ID to end
+ * @param error - Optional error if session ended due to failure
  */
-export async function endSession(sessionId: string): Promise<void> {
+export async function endSession(sessionId: string, error?: string): Promise<void> {
   const session = activeSessions.get(sessionId)
   if (!session) return
 
   // Kill the persistent sandbox
   if (session.sandbox) {
     await session.sandbox.kill()
+  }
+
+  // Mark session status in Convex
+  if (session.convex && session.sandboxRunId) {
+    const durationMs = Date.now() - session.createdAt.getTime()
+    if (error) {
+      markSandboxFailed(session.convex, session.sandboxRunId, error).catch((err) => {
+        console.error('[Convex] Failed to mark session failed:', err)
+      })
+    } else {
+      // Create a summary of the session for the result
+      const summary = `Session completed: ${session.turnCount} turns, ${durationMs}ms duration`
+      markSandboxSucceeded(session.convex, session.sandboxRunId, summary).catch((err) => {
+        console.error('[Convex] Failed to mark session succeeded:', err)
+      })
+    }
   }
 
   // Log final metadata and end the span
