@@ -486,7 +486,11 @@ export const internalGet = internalQuery({
 
 /**
  * Internal query to count recent sandbox runs by user for rate limiting
- * Counts runs started within the given time window by a specific user
+ * Counts ALL runs started within the given time window by a specific user
+ * (includes booting, running, succeeded, failed, canceled)
+ *
+ * Uses composite index by_createdBy_startedAt for efficient O(k) queries
+ * where k = number of matching runs, instead of O(n) where n = all runs.
  *
  * @param userId - The user ID to count runs for
  * @param sinceMs - Time window in milliseconds (e.g., 60000 for last minute)
@@ -499,10 +503,18 @@ export const internalCountRecentByUser = internalQuery({
   },
   handler: async (ctx, args): Promise<number> => {
     const cutoff = Date.now() - args.sinceMs;
+
+    // Use composite index to efficiently query by user and filter by time
+    // by_createdBy_startedAt: ["createdBy", "startedAt"]
+    // - eq("createdBy", userId) filters to this user's runs
+    // - gt("startedAt", cutoff) filters to recent runs only
     const recentRuns = await ctx.db
       .query("sandboxRuns")
-      .withIndex("by_status", (q) => q.eq("status", "running"))
+      .withIndex("by_createdBy_startedAt", (q) =>
+        q.eq("createdBy", args.userId).gt("startedAt", cutoff)
+      )
       .collect();
-    return recentRuns.filter(r => r.createdBy === args.userId && r.startedAt > cutoff).length;
+
+    return recentRuns.length;
   },
 });

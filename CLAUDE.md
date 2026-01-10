@@ -2,607 +2,167 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
----
-
-# Claude Agent SDK Experiments
-
-> TypeScript SDK for orchestrating Claude agents in isolated E2B sandboxes with full streaming support
-
 ## Project Overview
 
-This is a **TypeScript-first boilerplate** that enables running Claude agents with real tool execution capabilities in isolated E2B sandbox containers. Users write TypeScript code (Next.js, Express, Node.js) that orchestrates Python-based Claude agents running in cloud containers.
+TypeScript SDK for running Claude agents in isolated E2B sandboxes with real-time streaming. Users write TypeScript (Next.js, Express, Node.js) that orchestrates Python-based Claude agents running in cloud containers.
 
-### What This Project Does
-
-- **Provides a TypeScript SDK** (`examples/lib/agent.ts`) for creating, running, and streaming Claude agents
-- **Manages E2B sandboxes** - Isolated Linux containers where agents can safely execute code, read/write files, and run bash commands
-- **Streams real-time results** - SSE (Server-Sent Events) and callback-based streaming for web applications
-- **Perfect for Next.js** - Drop-in API routes with streaming support
-
-### What Makes This Different
-
-Unlike the Claude API which *suggests* tool calls, this SDK *actually executes* them:
-
-| Feature | Claude API | This SDK |
-|---------|-----------|----------|
-| Tool execution | Simulated | Real (in sandbox) |
-| File operations | No | Yes |
-| Bash commands | No | Yes |
-| Streaming | Text only | Tools + text + thinking |
-| Isolation | N/A | Full container isolation |
+**Key insight**: Unlike the Claude API which *suggests* tool calls, this SDK *actually executes* them in sandboxes with full file system, bash, and web access.
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────┐
-│   Your TypeScript Application          │
-│   - Next.js API routes                  │
-│   - Express servers                     │
-│   - Node.js scripts                     │
-│   - runPythonAgent() SDK function       │
-└──────────────┬──────────────────────────┘
-               │
-       ┌───────┴───────┐
-       │               │
-       ↓               ↓
-┌──────────────┐  ┌─────────────────────────┐
-│   Convex     │  │   E2B Cloud             │
-│   Backend    │  │   (Sandbox Provider)    │
-│              │  │                         │
-│  - Threads   │  │   - Spins up containers │
-│  - Messages  │  │   - Manages lifecycle   │
-│  - Agents    │  │   - Streams stdout/err  │
-│  - Workspaces│  └───────────┬─────────────┘
-│  - Artifacts │              │
-└──────────────┘              ↓
-                 ┌─────────────────────────────────────────┐
-                 │   E2B Sandbox (Python Runtime)          │
-                 │   ┌─────────────────────────────────┐   │
-                 │   │  Claude Agent SDK (Python)      │   │
-                 │   │  - Read/Write/Edit tools        │   │
-                 │   │  - Bash execution               │   │
-                 │   │  - File search (Glob/Grep)      │   │
-                 │   │  - Multi-turn reasoning         │   │
-                 │   └─────────────────────────────────┘   │
-                 └─────────────────────────────────────────┘
+TypeScript Application → SDK (examples/lib/) → E2B Sandbox (Python) → Claude Agent → Real Tools
 ```
 
-**Key Point**: Users only write TypeScript. The Python runtime exists inside E2B sandboxes and is managed automatically by the SDK.
+**Data flow**:
+1. TypeScript calls `runPythonAgent()` with a prompt
+2. SDK creates E2B sandbox from template
+3. Python agent executes with ClaudeSDKClient inside sandbox
+4. Agent uses real tools (Read, Write, Edit, Bash, Glob, Grep, WebFetch)
+5. Results stream back via stdout JSON events
+6. Sandbox is killed, result returned to TypeScript
 
-### Convex Backend Integration
+## Commands
 
-The project uses **Convex** as a real-time backend for:
+```bash
+# Setup (first time)
+npm setup                    # Automated: installs deps, auth, builds template
 
-- **@convex-dev/agent**: Pre-built agent infrastructure with threads, messages, and streaming
-- **Multi-tenancy**: Workspaces and workspace members for team collaboration
-- **Sandbox orchestration**: Track E2B sandbox runs with state machine (booting → running → succeeded/failed/canceled)
-- **Artifact management**: Human-in-the-loop review workflow for agent-generated files
-- **Idle cleanup**: Cron job kills sandboxes idle for 15+ minutes to prevent runaway costs
+# Run examples
+npm run example              # Basic agent execution
+npm run streaming            # Streaming patterns demo
+npm run console-streaming    # Colored console output
+npm run sse-api              # Full SSE server + web UI at localhost:3000
 
-Data flows:
-1. User creates a thread in Convex
-2. `startSandboxRun` action boots an E2B sandbox
-3. Agent executes in sandbox, streams results back
-4. Artifacts saved to Convex storage for review
-5. `killIdleSandboxes` cron cleans up abandoned sandboxes
+# Development
+npm run build:template       # Rebuild E2B template after changes
+npx convex dev               # Start Convex backend dev server
+npx convex deploy            # Deploy Convex to production
+```
 
 ## Project Structure
 
 ```
-claude-agent-sdk-experiments/
-├── convex/                       # Convex backend (real-time database + serverless)
-│   ├── _generated/               # Auto-generated types (from schema)
-│   ├── actions/                  # Serverless actions (Node.js runtime)
-│   │   ├── startSandboxRun.ts    # Creates E2B sandbox, updates run status
-│   │   └── killIdleSandboxes.ts  # Cron job to clean up idle sandboxes
-│   ├── lib/                      # Shared utilities
-│   │   └── stateMachine.ts       # Sandbox status transitions
-│   ├── schema.ts                 # Database schema (4 tables)
-│   ├── convex.config.ts          # @convex-dev/agent component config
-│   ├── workspaces.ts             # Workspace CRUD mutations/queries
-│   ├── workspaceMembers.ts       # Member management with role validation
-│   ├── sandboxRuns.ts            # Sandbox run tracking with state machine
-│   ├── artifacts.ts              # Artifact CRUD with HITL review workflow
-│   └── crons.ts                  # Scheduled jobs (idle cleanup every 30s)
-│
-├── examples/                     # TypeScript SDK and examples
-│   ├── lib/                      # Core SDK (what you import)
-│   │   ├── agent.ts              # Main SDK functions
-│   │   └── streaming.ts          # Streaming utilities
-│   ├── basic_typescript.ts       # Simple usage examples
-│   ├── streaming_example.ts      # Streaming demos
-│   ├── console_streaming_example.ts  # Colored console output
-│   ├── sse-streaming-api.ts      # Complete SSE server + web UI
-│   └── nextjs-api-route.ts       # Next.js integration patterns
-│
-├── agents/                       # E2B template definitions
-│   └── base/                     # Base Python template
-│       ├── template.py           # E2B template config
-│       ├── build_dev.py          # Template builder
-│       ├── Dockerfile            # Container definition
-│       └── e2b.toml              # Resource limits (2 CPU, 4GB RAM)
-│
-├── docs/                         # Research and documentation
-│   ├── E2B_STREAMING_RESEARCH.md
-│   ├── STREAMING_EXAMPLES.md
-│   └── E2B_PRODUCTION_RECOMMENDATIONS.md
-│
-├── .claude/                      # Claude Code configuration
-│   ├── settings.json             # Permissions
-│   └── skills/                   # Custom skills
-│       └── create-e2b-agent/     # E2B agent builder skill
-│
-├── RESEARCH_FINDINGS.md          # Claude Agent SDK research
-├── FEATURE_PRIORITIES.md         # Roadmap for new features
-├── package.json                  # TypeScript dependencies
-├── tsconfig.json                 # TypeScript config
-├── setup.sh                      # Automated setup script (run via: npm setup)
-└── README.md                     # Main documentation
+examples/lib/           # Core TypeScript SDK
+  agent.ts              # Main functions: runPythonAgent, runPythonAgentStreaming, runPythonAgentDetailed
+  streaming.ts          # Event parsing, line buffering, console handlers
+  observability.ts      # Braintrust integration
+  cost-tracking.ts      # Claude + E2B cost calculation
+  error-tracking.ts     # Error categorization
+
+examples/               # Usage examples
+  basic_typescript.ts   # Simple examples
+  sse-streaming-api.ts  # Complete SSE server with web UI
+
+convex/                 # Real-time backend
+  schema.ts             # Database: workspaces, workspaceMembers, sandboxRuns, artifacts
+  sandboxRuns.ts        # State machine: booting → running → succeeded/failed/canceled
+  actions/              # startSandboxRun, cancelSandboxRun, killIdleSandboxes
+  lib/                  # Authorization, validation, state machine helpers
+
+agents/base/            # E2B template definition
+  template.py           # Python environment (Claude Agent SDK, tools)
+  e2b.toml              # Resource limits (2 CPU, 4GB RAM)
 ```
 
-## Available Skills
-
-### `/create-e2b-agent`
-
-**Purpose**: Create new E2B sandbox agents through an adaptive interview process.
-
-**Use when**: You want to create a custom E2B agent template with specific tools, permissions, or MCP servers.
-
-**What it does**:
-- Conducts intelligent interview to gather requirements
-- Generates all necessary files (template.py, CLAUDE.md, settings.json, etc.)
-- Creates build scripts for development and production
-- Provides usage examples
-
-**Example**:
-```
-User: /create-e2b-agent
-Claude: I'll help you create an E2B agent. What problem should this agent solve?
-User: I need an agent that analyzes CSV files and generates reports
-Claude: *Creates complete agent template with pandas, data analysis tools*
-```
-
-## Common Development Tasks
-
-### Setup and Initial Configuration
-
-**Automated setup (recommended):**
-```bash
-npm setup
-```
-
-This single command:
-- Installs all dependencies (npm packages)
-- Authenticates with Claude (browser OAuth)
-- Authenticates with E2B
-- Auto-extracts and saves credentials to `.env`
-- Builds the E2B sandbox template
-- Verifies everything is ready
-
-The template includes:
-- Python 3.12+ runtime
-- Claude Code CLI
-- Claude Agent SDK
-- Development tools (git, ripgrep, etc.)
-
-### Running Examples
-
-```bash
-# Basic TypeScript example (validates configuration first)
-npm run example
-
-# Streaming with colored console output
-npm run console-streaming
-
-# Advanced streaming patterns (stdout, Python code, JSON events)
-npm run streaming
-
-# Full SSE server with web UI (opens http://localhost:3000)
-npm run sse-api
-```
-
-### Testing and Development
-
-```bash
-# Test basic agent functionality
-npm run example
-
-# Test streaming implementation
-npm run streaming
-
-# Test SSE with browser UI
-npm run sse-api
-# Open http://localhost:3000
-
-# Rebuild template after changes
-npm run build:template
-```
-
-### Building Custom E2B Templates
-
-```bash
-# Edit the template to add dependencies
-cd agents/base
-nano template.py  # Add pip packages, system tools, etc.
-
-# Rebuild template (updates E2B_TEMPLATE_ID in .env)
-cd ../..
-npm run build:template
-
-# The build process:
-# 1. Creates E2B template from template.py
-# 2. Uploads to E2B cloud
-# 3. Saves template ID to .env
-# 4. Template becomes available in ~10-30 seconds
-```
-
-### Convex Development
-
-```bash
-# Start Convex development server (watches for changes, syncs schema)
-npx convex dev
-
-# Deploy to production
-npx convex deploy
-
-# View Convex dashboard (data explorer, logs, functions)
-npx convex dashboard
-
-# Generate types from schema (usually automatic with `convex dev`)
-npx convex codegen
-
-# Run a one-time sync without watching
-npx convex dev --once
-```
-
-**Convex Tables**:
-- `workspaces` - Multi-tenant containers
-- `workspaceMembers` - User roles (owner/admin/member)
-- `sandboxRuns` - E2B sandbox lifecycle tracking
-- `artifacts` - Agent-generated files with review workflow
-
-**State Machine** (`convex/lib/stateMachine.ts`):
-```
-booting → running → succeeded
-                 → failed
-                 → canceled
-```
-
-## SDK Functions Reference
-
-### `runPythonAgent(config: AgentConfig): Promise<string>`
-
-Run an agent and return the final result.
+## SDK Functions
 
 ```typescript
+// Basic execution - returns final result
 const result = await runPythonAgent({
   prompt: 'Your task',
-  timeout: 120,    // Optional: seconds (default: 120)
-  verbose: true    // Optional: log progress (default: false)
+  timeout: 120,
+  verbose: true
 })
-```
 
-### `runPythonAgentStreaming(config: StreamingAgentConfig): Promise<string>`
-
-Run an agent with real-time event streaming.
-
-```typescript
+// Streaming - real-time events with callbacks
 const result = await runPythonAgentStreaming({
   prompt: 'Your task',
   onStream: {
-    onText: (text) => {},           // Agent text output
-    onThinking: (thinking) => {},    // Extended thinking
-    onToolUse: (id, name, input) => {},  // Tool execution
-    onToolResult: (id, content) => {},   // Tool output
-    onResult: (result, ms, cost) => {}   // Final result with cost tracking
+    onText: (text) => {},
+    onToolUse: (id, name, input) => {},
+    onThinking: (thinking) => {},
+    onResult: (result, durationMs, cost) => {}
   }
 })
+
+// Detailed - includes stdout, stderr, exitCode
+const { stdout, stderr, exitCode } = await runPythonAgentDetailed({ prompt: 'Your task' })
 ```
 
-### `runPythonAgentDetailed(config: AgentConfig): Promise<AgentResult>`
-
-Get detailed execution results including stdout, stderr, and exit codes.
-
-```typescript
-const execution = await runPythonAgentDetailed({
-  prompt: 'Your task'
-})
-
-console.log(execution.exitCode)
-console.log(execution.stdout)
-console.log(execution.stderr)
-```
-
-## Environment Configuration
-
-Required environment variables (`.env`):
+## Environment Variables
 
 ```bash
-# Claude OAuth Token (from: claude setup-token)
-CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat...
+# Required
+CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat...  # From: claude setup-token
+E2B_API_KEY=e2b_...                     # From: e2b.dev/dashboard
+E2B_TEMPLATE_ID=...                     # Auto-set by npm run build:template
 
-# E2B API Key (from: https://e2b.dev/dashboard)
-E2B_API_KEY=e2b_...
-
-# E2B Template ID (auto-generated by build:template)
-E2B_TEMPLATE_ID=your-template-id
+# Optional - Observability
+BRAINTRUST_API_KEY=bt_...               # Auto-traces executions
+BRAINTRUST_PROJECT_NAME=claude-agent-sdk
+BRAINTRUST_SAMPLE_RATE=1.0              # 0.0-1.0, production: use 0.1
 ```
 
-### Getting Credentials
+## Convex State Machine
 
-**Claude OAuth Token:**
-```bash
-# Install Claude Code CLI (if not already installed)
-npm install -g @anthropic-ai/claude-code
+Sandbox runs follow strict state transitions:
+- `booting` → `running` | `failed` | `canceled`
+- `running` → `succeeded` | `failed` | `canceled`
+- Terminal states have no outgoing transitions
 
-# Generate setup token (requires Claude Max subscription)
-claude setup-token
+Idle cleanup cron runs every 30 seconds, killing:
+- Sandboxes idle > 15 minutes
+- Sandboxes stuck in `booting` > 5 minutes
 
-# Copy token to .env file
-```
+## Security Model
 
-**E2B API Key:**
-1. Sign up at https://e2b.dev/
-2. Go to dashboard: https://e2b.dev/dashboard
-3. Copy API key
-4. Add to `.env` file
+- **Prompt sanitization**: Double JSON-serialization prevents injection
+- **Sandbox isolation**: Separate Firecracker microVMs per execution
+- **Resource limits**: Configurable CPU, RAM, timeout in `e2b.toml`
+- **Automatic cleanup**: Sandboxes killed after execution + cron cleanup
+- **No persistent state**: Each execution is ephemeral (stateful sessions planned)
 
-## Permissions
+## Common Tasks
 
-This project uses `.claude/settings.json` to manage permissions:
+### Adding SDK Features
+1. Edit `examples/lib/agent.ts` for core functions
+2. Edit `examples/lib/streaming.ts` for event handling
+3. Test with `npm run example` or `npm run streaming`
 
-**Allowed operations**:
-- `git` commands (status, commit, push, etc.)
-- `python`, `pip`, `pytest` (for template building)
-- `npm`, `npx` (for TypeScript development)
-- `e2b` commands (sandbox management)
-- All file operations (Read, Write, Edit)
+### Modifying E2B Template
+1. Edit `agents/base/template.py` to add Python packages or system tools
+2. Run `npm run build:template`
+3. New template ID auto-saved to `.env`
 
-**Denied operations**:
-- `rm -rf` (safety)
+### Adding Convex Features
+1. Edit `convex/schema.ts` for data model changes
+2. Run `npx convex dev` to sync schema
+3. Add mutations/queries in appropriate files
+4. Follow patterns in `convex/lib/authorization.ts` for auth
 
-## Common Use Cases
+## Known Issues
 
-Based on production deployments and community usage, this SDK is commonly used for:
+**Rate Limiting Bug** (`convex/sandboxRuns.ts:internalCountRecentByUser`):
+- Only checks `running` status, misses `booting`
+- Loads all sandboxes into memory (O(n) issue)
+- Needs composite index `by_user_startedAt`
 
-### 1. Code Generation & Analysis (40% of use cases)
-- Automated bug fixing
-- Codebase analysis and documentation
-- Test generation
-- Refactoring assistance
+**Unimplemented Schema Fields**:
+- `sandboxRuns.e2bCost` - Never populated
+- `artifacts.previewText` - Never generated
 
-### 2. Data Processing (25% of use cases)
-- CSV/spreadsheet analysis
-- Report generation
-- Data transformation pipelines
+## Skills
 
-### 3. Multi-Agent Systems (20% of use cases)
-- Research coordination (specialist subagents)
-- Full-stack development (frontend + backend + testing agents)
-- Documentation workflows
+### `/create-e2b-agent`
+Creates custom E2B agent templates through an adaptive interview. Generates all files (template.py, CLAUDE.md, settings.json) and build scripts.
 
-### 4. Web Automation (15% of use cases)
-- Browser automation with testing tools
-- API integration and orchestration
-- Workflow automation
+## UBS Quick Reference
 
-## Current Capabilities
-
-### ✅ Production-Ready Features
-
-- **Real-time streaming**: SSE implementation with line buffering and event parsing
-- **Emoji-based visual distinction**: Console output with 🔧 tools, 💬 text, 🤔 thinking, ✅ results
-- **Error handling**: Automatic retry with exponential backoff (built into Claude Agent SDK)
-- **TypeScript-first**: Full type definitions and IDE support
-- **Next.js integration**: Drop-in API routes with streaming support
-- **Cost tracking**: Built-in token usage and cost reporting in streaming results
-- **Sandbox isolation**: Firecracker microVMs with sub-200ms cold starts
-
-### 🚧 Planned Features (See FEATURE_PRIORITIES.md)
-
-**Phase 1 - Production Essentials** (Weeks 1-3):
-1. Session Management System - Multi-turn conversations with state persistence
-2. OpenTelemetry Integration - Production observability (Langfuse, SigNoz, etc.)
-3. Enhanced Error Recovery - Configurable retry policies, error classification
-
-**Phase 2 - Advanced Capabilities** (Weeks 3-6):
-4. Multi-Agent Orchestration - Orchestrator + subagent patterns, parallel execution
-5. MCP Integration Templates - Pre-configured top 10 MCP servers (GitHub, Slack, Database)
-
-**Phase 3 - Developer Experience** (Weeks 6-9):
-6. WebSocket Streaming - Bidirectional communication and interruptions
-7. Cost Optimization - Sandbox pooling, resource auto-scaling
-8. Testing Framework - Agent testing utilities and validation helpers
-
-See `RESEARCH_FINDINGS.md` for detailed analysis and `FEATURE_PRIORITIES.md` for implementation roadmap.
-
-## Debugging
-
-### Enable Verbose Logging
-
-```typescript
-await runPythonAgent({
-  prompt: 'Your task',
-  verbose: true  // Shows sandbox creation, execution, cleanup
-})
-```
-
-### Check Sandbox Logs
-
-When agents fail, examine the detailed execution:
-
-```typescript
-const execution = await runPythonAgentDetailed({
-  prompt: 'Your task'
-})
-
-if (execution.exitCode !== 0) {
-  console.error('Agent failed!')
-  console.error('STDOUT:', execution.stdout)
-  console.error('STDERR:', execution.stderr)
-}
-```
-
-### Common Issues
-
-**"E2B_TEMPLATE_ID not set"**
-- Run: `npm run build:template`
-- Verify `.env` file was updated with template ID
-
-**"Invalid OAuth token"**
-- Regenerate: `claude setup-token`
-- Update `.env` with new token
-- Ensure Claude Max subscription is active
-
-**Streaming not working**
-- Check that you're using `runPythonAgentStreaming()`, not `runPythonAgent()`
-- Verify `onStream` callbacks are provided
-- Check browser console for SSE connection errors
-
-**"Sandbox creation timed out"**
-- E2B may be slow/down - check https://status.e2b.dev/
-- Increase timeout: `timeout: 300`
-- Template may be too large - reduce dependencies
-
-**"Module not found: claude_agent_sdk"**
-- Rebuild template: `npm run build:template`
-- Check that `template.py` includes SDK installation
-
-## Architecture Principles
-
-When working on this codebase, follow these principles:
-
-### 1. TypeScript-First Design
-- Users write TypeScript, not Python
-- Python exists only inside E2B sandboxes
-- SDK functions should feel native to TypeScript/Next.js developers
-- Provide comprehensive type definitions
-
-### 2. Streaming is Primary
-- SSE and real-time updates are key features
-- Always implement streaming callbacks alongside basic execution
-- Line buffering is critical for partial JSON handling
-- Provide visual distinction (emojis) for different event types
-
-### 3. Production-Ready from Day One
-- Implement error handling, retry logic, and observability
-- Track costs and provide usage metrics
-- Support multi-tenant scenarios
-- Document security considerations
-
-### 4. Next.js is the Primary Use Case
-- Optimize for API routes and server components
-- Provide drop-in examples for App Router and Pages Router
-- Support both SSE and standard request/response patterns
-
-### 5. Simplicity Over Features
-- Avoid over-engineering
-- Follow existing patterns in `examples/lib/`
-- Don't add features without clear use cases
-- Keep the API surface small and focused
-
-### 6. E2B Sandboxes are Ephemeral (Currently)
-- Each agent execution creates and destroys a sandbox
-- State is not preserved between executions (yet)
-- Template-based approach ensures fast startup (~150ms)
-- Future: Add session management for stateful workflows
-
-## Development Workflow
-
-### Adding New Features
-
-1. **Research and validate** - Check RESEARCH_FINDINGS.md for alignment with best practices
-2. **Update TypeScript SDK** (`examples/lib/agent.ts` or new modules)
-3. **Add examples** in `examples/` directory
-4. **Test locally** with `npm run example`
-5. **Update documentation** (README.md, this file, relevant docs/)
-6. **Commit changes** (descriptive messages, no co-author attribution)
-
-### Testing Changes
+Run `ubs <changed-files>` before commits. Exit 0 = safe.
 
 ```bash
-# Test basic functionality
-npm run example
-
-# Test streaming
-npm run streaming
-
-# Test SSE with browser UI
-npm run sse-api
-# Open http://localhost:3000
+ubs file.ts file2.py                    # Specific files (< 1s)
+ubs $(git diff --name-only --cached)    # Staged files
+ubs .                                   # Whole project
 ```
-
-### Building New Templates
-
-When adding features that require new dependencies or tools:
-
-```bash
-cd agents/base
-
-# Edit template.py to add dependencies
-nano template.py
-
-# Example: Add pandas for data analysis
-# .run_cmd("pip install pandas numpy matplotlib")
-
-# Rebuild template
-./scripts/build_dev.sh
-
-# Template ID saved to .env automatically
-```
-
-## Cost Optimization
-
-E2B sandboxes use per-second billing: **$0.000014/vCPU/second** (~$0.05/hour for 2 vCPU)
-
-**Current Implementation**:
-- Creates new sandbox for each task
-- Destroys immediately after completion
-- Cold start: ~150ms (Firecracker microVMs)
-
-**Planned Optimizations** (see E2B_PRODUCTION_RECOMMENDATIONS.md):
-- Sandbox pooling (reuse sandboxes, save ~$0.15 per reused task)
-- Pause/resume for long-running sessions (preserve state for 24 hours)
-- Auto-scaling resources (1 CPU for simple tasks, 2+ for complex)
-- Template pre-warming (reduce first-task latency)
-
-## Security Considerations
-
-- **Input sanitization**: All prompts are double JSON-serialized to prevent code injection
-- **Sandbox isolation**: E2B provides container-level isolation (separate microVMs)
-- **Resource limits**: Configurable CPU, RAM, and timeout limits in `e2b.toml`
-- **OAuth tokens**: Credentials injected as environment variables, never in code
-- **Automatic cleanup**: Sandboxes are terminated after execution (no orphaned resources)
-
-## Resources
-
-- [README.md](./README.md) - Complete user documentation
-- [RESEARCH_FINDINGS.md](./RESEARCH_FINDINGS.md) - Claude Agent SDK research and best practices
-- [FEATURE_PRIORITIES.md](./FEATURE_PRIORITIES.md) - Development roadmap
-- [docs/E2B_PRODUCTION_RECOMMENDATIONS.md](./docs/E2B_PRODUCTION_RECOMMENDATIONS.md) - E2B capabilities and patterns
-- [examples/](./examples/) - Working code examples
-- [E2B Docs](https://e2b.dev/docs) - E2B platform documentation
-- [Claude Agent SDK Docs](https://platform.claude.com/docs/agent-sdk) - Official SDK reference
-
-## Notes for Claude Code
-
-When working on this codebase:
-
-1. **This is a boilerplate project** - Focus on building reusable, production-ready features
-2. **TypeScript-first** - Users write TypeScript, Python is sandbox-internal
-3. **Streaming is critical** - Real-time updates build user trust
-4. **Research-driven development** - Refer to RESEARCH_FINDINGS.md for validated patterns
-5. **Next.js optimization** - Primary use case is web applications
-6. **Simple over clever** - Avoid over-engineering, follow existing patterns
-7. **Production-ready** - Error handling, observability, and cost tracking are priorities
-
-When making commits:
-- Use descriptive commit messages
-- Don't add co-author attribution
-- Keep commits focused and atomic
-
-When users ask for help:
-- Point them to relevant examples first
-- Use `/create-e2b-agent` for custom agent templates
-- Emphasize TypeScript SDK over manual E2B manipulation
-- Reference research documents for production best practices

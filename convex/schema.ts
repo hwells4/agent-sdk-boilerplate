@@ -60,7 +60,8 @@ export default defineSchema({
     .index("by_workspace", ["workspaceId"])
     .index("by_status", ["status"])
     .index("by_status_activity", ["status", "lastActivityAt"])
-    .index("by_status_startedAt", ["status", "startedAt"]),
+    .index("by_status_startedAt", ["status", "startedAt"])
+    .index("by_createdBy_startedAt", ["createdBy", "startedAt"]),
 
   // Artifacts produced by sandbox runs
   artifacts: defineTable({

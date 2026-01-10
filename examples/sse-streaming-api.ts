@@ -111,6 +111,7 @@ app.get('/', (_req: Request, res: Response) => {
         let eventSource = null;
 
         function addOutput(text, className = '') {
+            if (!output) return;
             const span = document.createElement('span');
             span.className = className;
             span.textContent = text + '\\n';
@@ -119,7 +120,7 @@ app.get('/', (_req: Request, res: Response) => {
         }
 
         function clearOutput() {
-            output.innerHTML = '';
+            if (output) output.innerHTML = '';
         }
 
         function closeEventSource() {
@@ -160,7 +161,8 @@ app.get('/', (_req: Request, res: Response) => {
             clearOutput();
             addOutput('Connecting to stream...', 'status');
 
-            const prompt = document.getElementById('prompt').value;
+            const promptEl = document.getElementById('prompt');
+            const prompt = promptEl ? promptEl.value : '';
             eventSource = new EventSource('/api/stream/python?prompt=' + encodeURIComponent(prompt));
 
             eventSource.addEventListener('chunk', (e) => {
@@ -224,7 +226,8 @@ app.get('/', (_req: Request, res: Response) => {
             clearOutput();
             addOutput('Connecting to Claude Agent stream...', 'status');
 
-            const prompt = document.getElementById('prompt').value;
+            const promptEl = document.getElementById('prompt');
+            const prompt = promptEl ? promptEl.value : '';
 
             // Use fetch to POST the prompt, then connect to SSE
             try {
