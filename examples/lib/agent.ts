@@ -41,6 +41,7 @@ import {
   markSandboxFailed,
   persistCostData,
   createHeartbeat,
+  captureArtifacts,
 } from './convex-integration'
 
 export interface AgentConfig {
@@ -313,6 +314,18 @@ export async function runPythonAgent(config: AgentConfig): Promise<string> {
       // Display cost to user if verbose
       if (verbose && cost.total > 0) {
         console.log('\n' + formatCost(cost))
+      }
+
+      // Capture artifacts if configured (must happen before sandbox.kill())
+      if (convex && sandboxRunId && convex.persistArtifacts) {
+        try {
+          const artifacts = await captureArtifacts(convex, sandboxRunId, sandbox)
+          if (verbose && artifacts.length > 0) {
+            console.log(`[Artifacts] Captured ${artifacts.length} artifact(s)`)
+          }
+        } catch (err) {
+          console.error('[Artifacts] Failed to capture artifacts:', err)
+        }
       }
 
       // Persist cost data and mark succeeded in Convex
@@ -915,6 +928,18 @@ if __name__ == "__main__":
       // Check if execution ended with an error
       const errorEvent = events.find(e => e.type === 'error')
       const hasError = errorEvent || !finalResult
+
+      // Capture artifacts if configured and successful (must happen before sandbox.kill())
+      if (convex && sandboxRunId && convex.persistArtifacts && !hasError) {
+        try {
+          const artifacts = await captureArtifacts(convex, sandboxRunId, sandbox)
+          if (verbose && artifacts.length > 0) {
+            console.log(`[Artifacts] Captured ${artifacts.length} artifact(s)`)
+          }
+        } catch (err) {
+          console.error('[Artifacts] Failed to capture artifacts:', err)
+        }
+      }
 
       // Persist to Convex based on success/failure
       if (convex && sandboxRunId) {

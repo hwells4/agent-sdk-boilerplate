@@ -23,8 +23,26 @@
  * ```
  */
 
-import { STRING_LIMITS, TIMEOUTS } from './constants'
+import { STRING_LIMITS, TIMEOUTS, ARTIFACT_LIMITS } from './constants'
 import { CostBreakdown, TokenUsage } from './cost-tracking'
+
+// ============================================================================
+// E2B Sandbox Interface (minimal for artifact capture)
+// ============================================================================
+
+/**
+ * Minimal interface for E2B sandbox file operations.
+ * This avoids importing the full E2B SDK as a dependency of convex-integration.
+ */
+export interface SandboxFiles {
+  list(path: string): Promise<Array<{ name: string; path: string; size?: number }>>
+  read(path: string): Promise<Uint8Array | string>
+}
+
+export interface SandboxInterface {
+  sandboxId: string
+  files: SandboxFiles
+}
 
 // ============================================================================
 // Types
@@ -93,6 +111,8 @@ export interface SandboxRunUpdate {
 const MUTATIONS = {
   internalCreate: 'sandboxRuns:internalCreate',
   internalUpdate: 'sandboxRuns:internalUpdate',
+  storageGenerateUploadUrl: 'storage:internalGenerateUploadUrl',
+  artifactsInternalCreate: 'artifacts:internalCreate',
 } as const
 
 // ============================================================================
@@ -364,5 +384,326 @@ export function createHeartbeat(
         console.error('Heartbeat update failed:', error)
       })
     }
+  }
+}
+
+// ============================================================================
+// Artifact Capture Functions
+// ============================================================================
+
+/**
+ * Artifact type based on file extension
+ */
+export type ArtifactType = 'file' | 'image' | 'code' | 'log' | 'other'
+
+/**
+ * Result of capturing artifacts from a sandbox
+ */
+export interface CapturedArtifact {
+  sandboxPath: string
+  artifactId: string
+  size: number
+  contentType: string
+  type: ArtifactType
+}
+
+/**
+ * Options for artifact capture
+ */
+export interface ArtifactCaptureOptions {
+  /** Glob patterns to match files (default: common output patterns) */
+  patterns?: string[]
+  /** Maximum file size to capture in bytes (default: 10MB) */
+  maxFileSize?: number
+  /** Maximum number of artifacts to capture (default: 50) */
+  maxArtifacts?: number
+}
+
+/**
+ * Infer artifact type from file extension.
+ */
+function inferArtifactType(filename: string): ArtifactType {
+  const ext = filename.toLowerCase().split('.').pop() || ''
+
+  // Image files
+  if (['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico', 'bmp'].includes(ext)) {
+    return 'image'
+  }
+
+  // Code files
+  if (['py', 'js', 'ts', 'jsx', 'tsx', 'rb', 'go', 'rs', 'java', 'c', 'cpp', 'h', 'hpp', 'cs', 'swift', 'kt', 'scala', 'sh', 'bash', 'zsh', 'sql'].includes(ext)) {
+    return 'code'
+  }
+
+  // Log files
+  if (['log', 'out', 'err'].includes(ext)) {
+    return 'log'
+  }
+
+  // General files (data, config, docs)
+  if (['json', 'yaml', 'yml', 'toml', 'xml', 'csv', 'md', 'txt', 'html', 'css', 'ini', 'conf', 'cfg'].includes(ext)) {
+    return 'file'
+  }
+
+  return 'other'
+}
+
+/**
+ * Infer MIME content type from file extension.
+ */
+function inferContentType(filename: string): string {
+  const ext = filename.toLowerCase().split('.').pop() || ''
+
+  const mimeTypes: Record<string, string> = {
+    // Images
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    gif: 'image/gif',
+    svg: 'image/svg+xml',
+    webp: 'image/webp',
+    ico: 'image/x-icon',
+    bmp: 'image/bmp',
+
+    // Code/text
+    py: 'text/x-python',
+    js: 'application/javascript',
+    ts: 'application/typescript',
+    jsx: 'text/jsx',
+    tsx: 'text/tsx',
+    rb: 'text/x-ruby',
+    go: 'text/x-go',
+    rs: 'text/x-rust',
+    java: 'text/x-java',
+    c: 'text/x-c',
+    cpp: 'text/x-c++',
+    h: 'text/x-c',
+    hpp: 'text/x-c++',
+    cs: 'text/x-csharp',
+    swift: 'text/x-swift',
+    kt: 'text/x-kotlin',
+    scala: 'text/x-scala',
+    sh: 'application/x-sh',
+    bash: 'application/x-sh',
+    sql: 'application/sql',
+
+    // Data/config
+    json: 'application/json',
+    yaml: 'text/yaml',
+    yml: 'text/yaml',
+    toml: 'application/toml',
+    xml: 'application/xml',
+    csv: 'text/csv',
+    md: 'text/markdown',
+    txt: 'text/plain',
+    html: 'text/html',
+    css: 'text/css',
+    ini: 'text/plain',
+    conf: 'text/plain',
+    cfg: 'text/plain',
+    log: 'text/plain',
+  }
+
+  return mimeTypes[ext] || 'application/octet-stream'
+}
+
+/**
+ * Generate a human-readable title from a file path.
+ */
+function generateArtifactTitle(sandboxPath: string): string {
+  const filename = sandboxPath.split('/').pop() || sandboxPath
+  // Truncate if too long
+  if (filename.length > ARTIFACT_LIMITS.MAX_TITLE_LENGTH) {
+    return filename.substring(0, ARTIFACT_LIMITS.MAX_TITLE_LENGTH - 3) + '...'
+  }
+  return filename
+}
+
+/**
+ * Upload file content to Convex storage.
+ *
+ * @param config - Convex configuration
+ * @param content - File content as Uint8Array or string
+ * @param contentType - MIME type of the content
+ * @returns Storage ID from Convex
+ */
+async function uploadToStorage(
+  config: ConvexConfig,
+  content: Uint8Array | string,
+  contentType: string
+): Promise<string> {
+  // Get upload URL from Convex
+  const uploadUrl = await config.client.mutation<string>(
+    MUTATIONS.storageGenerateUploadUrl,
+    {}
+  )
+
+  // Convert content to Blob for upload
+  const blob = content instanceof Uint8Array
+    ? new Blob([content], { type: contentType })
+    : new Blob([content], { type: contentType })
+
+  // Upload to Convex storage
+  const response = await fetch(uploadUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': contentType },
+    body: blob,
+  })
+
+  if (!response.ok) {
+    throw new Error(`Failed to upload to storage: ${response.statusText}`)
+  }
+
+  const result = await response.json() as { storageId: string }
+  return result.storageId
+}
+
+/**
+ * Create an artifact record in Convex.
+ *
+ * @param config - Convex configuration
+ * @param sandboxRunId - The sandbox run that produced this artifact
+ * @param params - Artifact parameters
+ * @returns The created artifact ID
+ */
+async function createArtifactRecord(
+  config: ConvexConfig,
+  sandboxRunId: string,
+  params: {
+    threadId: string
+    type: ArtifactType
+    title: string
+    storageId: string
+    contentType: string
+    size: number
+    sandboxPath: string
+  }
+): Promise<string> {
+  return config.client.mutation<string>(
+    MUTATIONS.artifactsInternalCreate,
+    {
+      sandboxRunId,
+      workspaceId: config.workspaceId,
+      threadId: params.threadId,
+      type: params.type,
+      title: params.title,
+      storageId: params.storageId,
+      contentType: params.contentType,
+      size: params.size,
+      sandboxPath: params.sandboxPath,
+    }
+  )
+}
+
+/**
+ * Capture artifacts from a sandbox and persist them to Convex.
+ *
+ * This function:
+ * 1. Lists files in the sandbox matching the specified patterns
+ * 2. Downloads each file's content
+ * 3. Uploads the content to Convex storage
+ * 4. Creates artifact records linking to the sandbox run
+ *
+ * Files are filtered by:
+ * - Pattern matching (default: common output patterns)
+ * - Maximum file size (default: 10MB)
+ * - Maximum artifact count (default: 50)
+ * - Exclusion of SDK-generated files (agent.py, streaming_agent.py)
+ *
+ * @param config - Convex configuration with persistArtifacts enabled
+ * @param sandboxRunId - The ID of the sandbox run record
+ * @param sandbox - E2B sandbox interface for file operations
+ * @param options - Optional capture configuration
+ * @returns Array of captured artifact info
+ */
+export async function captureArtifacts(
+  config: ConvexConfig,
+  sandboxRunId: string,
+  sandbox: SandboxInterface,
+  options: ArtifactCaptureOptions = {}
+): Promise<CapturedArtifact[]> {
+  const {
+    patterns = ['/home/user'],
+    maxFileSize = ARTIFACT_LIMITS.MAX_FILE_SIZE,
+    maxArtifacts = ARTIFACT_LIMITS.MAX_ARTIFACTS_PER_RUN,
+  } = options
+
+  const threadId = config.threadId || generateThreadId()
+  const captured: CapturedArtifact[] = []
+
+  // Exclusion list for SDK-generated files
+  const excludeFiles = new Set(['agent.py', 'streaming_agent.py'])
+
+  try {
+    // List files in the sandbox
+    for (const pattern of patterns) {
+      if (captured.length >= maxArtifacts) break
+
+      const files = await sandbox.files.list(pattern)
+
+      for (const file of files) {
+        if (captured.length >= maxArtifacts) break
+
+        const filename = file.name || file.path.split('/').pop() || ''
+
+        // Skip SDK-generated files
+        if (excludeFiles.has(filename)) {
+          continue
+        }
+
+        // Skip files that are too large (if size is known)
+        if (file.size !== undefined && file.size > maxFileSize) {
+          console.warn(`[Artifacts] Skipping ${file.path}: exceeds max size (${file.size} > ${maxFileSize})`)
+          continue
+        }
+
+        try {
+          // Download file content
+          const content = await sandbox.files.read(file.path)
+
+          // Check size after download if not known before
+          const size = content instanceof Uint8Array ? content.length : new TextEncoder().encode(content).length
+          if (size > maxFileSize) {
+            console.warn(`[Artifacts] Skipping ${file.path}: exceeds max size (${size} > ${maxFileSize})`)
+            continue
+          }
+
+          const contentType = inferContentType(filename)
+          const artifactType = inferArtifactType(filename)
+          const title = generateArtifactTitle(file.path)
+
+          // Upload to Convex storage
+          const storageId = await uploadToStorage(config, content, contentType)
+
+          // Create artifact record
+          const artifactId = await createArtifactRecord(config, sandboxRunId, {
+            threadId,
+            type: artifactType,
+            title,
+            storageId,
+            contentType,
+            size,
+            sandboxPath: file.path,
+          })
+
+          captured.push({
+            sandboxPath: file.path,
+            artifactId,
+            size,
+            contentType,
+            type: artifactType,
+          })
+        } catch (err) {
+          // Log error but continue with other files
+          console.error(`[Artifacts] Failed to capture ${file.path}:`, err)
+        }
+      }
+    }
+
+    return captured
+  } catch (err) {
+    // Log error but don't fail the main execution
+    console.error('[Artifacts] Failed to capture artifacts:', err)
+    return captured
   }
 }

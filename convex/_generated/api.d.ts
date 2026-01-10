@@ -15,9 +15,12 @@ import type * as artifacts from "../artifacts.js";
 import type * as crons from "../crons.js";
 import type * as lib_authorization from "../lib/authorization.js";
 import type * as lib_constants from "../lib/constants.js";
+import type * as lib_e2b from "../lib/e2b.js";
+import type * as lib_pagination from "../lib/pagination.js";
 import type * as lib_stateMachine from "../lib/stateMachine.js";
 import type * as lib_validators from "../lib/validators.js";
 import type * as sandboxRuns from "../sandboxRuns.js";
+import type * as storage from "../storage.js";
 import type * as workspaceMembers from "../workspaceMembers.js";
 import type * as workspaces from "../workspaces.js";
 
@@ -35,9 +38,12 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   "lib/authorization": typeof lib_authorization;
   "lib/constants": typeof lib_constants;
+  "lib/e2b": typeof lib_e2b;
+  "lib/pagination": typeof lib_pagination;
   "lib/stateMachine": typeof lib_stateMachine;
   "lib/validators": typeof lib_validators;
   sandboxRuns: typeof sandboxRuns;
+  storage: typeof storage;
   workspaceMembers: typeof workspaceMembers;
   workspaces: typeof workspaces;
 }>;

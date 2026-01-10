@@ -1,6 +1,6 @@
 # Unify SDK and Convex Architecture
 
-**Status**: In Progress (Phase 1 Complete)
+**Status**: In Progress (Phases 1-4 Complete)
 **Priority**: P1 - Core Architecture
 **Created**: 2025-01-10
 **Updated**: 2026-01-10
@@ -298,26 +298,61 @@ const result = await runPythonAgentStreaming({
    - Provide migration guide
    - Keep cron cleanup (still needed)
 
-### Phase 2: Enhanced Persistence
+### Phase 2: SDK Functions Integration ✅ COMPLETE
 
-**Goal**: Full artifact and analytics support
+**Goal**: SDK functions integrated with Convex tracking
 
-1. **Artifact persistence**
-   - Stream file creations to Convex storage
-   - Track which files agent created
-   - Enable artifact review workflow
+1. **runPythonAgent Convex integration** ✅
+   - Optional convex field in AgentConfig
+   - Create sandbox run record on start
+   - Update state on success/failure
+   - Persist cost data
 
-2. **Cost analytics**
-   - Store per-run cost breakdown in sandboxRuns
-   - Add workspace-level cost aggregation queries
+2. **runPythonAgentStreaming Convex integration** ✅
+   - Heartbeat support for long-running tasks
+   - Cost data persistence on completion
+
+### Phase 3: Sessions Integration ✅ COMPLETE
+
+**Goal**: Multi-turn sessions tracked in Convex
+
+1. **SessionConfig with Convex field** ✅
+   - Sessions create sandbox run records
+   - Activity updates prevent orphan cleanup
+   - Success/failure tracked on session end
+
+### Phase 4: Artifact Persistence ✅ COMPLETE
+
+**Goal**: Capture and persist sandbox artifacts
+
+1. **Convex storage integration** ✅
+   - convex/storage.ts with upload URL generation
+   - Blob upload to Convex storage
+
+2. **Artifact capture helpers** ✅
+   - captureArtifacts() in convex-integration.ts
+   - File type and MIME type inference
+   - Size limits and exclusion patterns
+
+3. **Integration in execution flow** ✅
+   - Artifacts captured before sandbox.kill()
+   - Controlled by persistArtifacts config flag
+   - Works in agent.ts and sessions.ts
+
+### Phase 5: Analytics (TODO)
+
+**Goal**: Full analytics support
+
+1. **Cost analytics**
+   - Workspace-level cost aggregation queries
    - Build cost dashboard queries
 
-3. **Execution analytics**
+2. **Execution analytics**
    - Token usage trends
    - Tool usage patterns
    - Error rate tracking
 
-### Phase 3: Advanced Features
+### Phase 6: Advanced Features (TODO)
 
 **Goal**: Production-ready multi-tenant platform
 
@@ -415,12 +450,14 @@ const result = await runPythonAgent({
 
 | File | Change | Status |
 |------|--------|--------|
-| `examples/lib/agent.ts` | Add Convex integration, state machine updates | ✅ Done |
-| `examples/lib/convex-integration.ts` | NEW: Convex client wrapper for SDK | ✅ Done |
-| `examples/lib/sessions.ts` | Add Convex integration for multi-turn | ✅ Done |
-| `examples/lib/constants.ts` | Add STRING_LIMITS, sync with Convex | ✅ Done |
+| `examples/lib/agent.ts` | Add Convex integration, state machine updates, artifact capture | ✅ Done |
+| `examples/lib/convex-integration.ts` | NEW: Convex client wrapper + artifact capture helpers | ✅ Done |
+| `examples/lib/sessions.ts` | Add Convex integration + artifact capture for multi-turn | ✅ Done |
+| `examples/lib/constants.ts` | Add STRING_LIMITS, ARTIFACT_LIMITS, sync with Convex | ✅ Done |
 | `convex/schema.ts` | Add cost, stats, result fields to sandboxRuns | ✅ Done (Phase 1) |
 | `convex/sandboxRuns.ts` | Add mutations for SDK integration | ✅ Done (Phase 1) |
+| `convex/storage.ts` | NEW: Storage upload URL generation for artifacts | ✅ Done (Phase 4) |
+| `convex/artifacts.ts` | Artifact creation mutations (pre-existing) | ✅ Done (Phase 4) |
 | `convex/lib/constants.ts` | Sync timeouts with SDK | ✅ Done (Phase 1) |
 | `convex/actions/startSandboxRun.ts` | Deprecate, keep for backwards compat | TODO |
 | `convex/actions/killIdleSandboxes.ts` | Keep as-is (still needed) | No change |

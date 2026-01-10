@@ -23,6 +23,7 @@ import {
   markSandboxSucceeded,
   markSandboxFailed,
   updateLastActivity,
+  captureArtifacts,
 } from './convex-integration'
 
 // Session TTL and cleanup configuration
@@ -411,6 +412,18 @@ asyncio.run(main())
 export async function endSession(sessionId: string, error?: string): Promise<void> {
   const session = activeSessions.get(sessionId)
   if (!session) return
+
+  // Capture artifacts before killing sandbox (if configured and successful)
+  if (session.convex && session.sandboxRunId && session.sandbox && session.convex.persistArtifacts && !error) {
+    try {
+      const artifacts = await captureArtifacts(session.convex, session.sandboxRunId, session.sandbox)
+      if (artifacts.length > 0) {
+        console.log(`[Session ${sessionId}] Captured ${artifacts.length} artifact(s)`)
+      }
+    } catch (err) {
+      console.error(`[Session ${sessionId}] Failed to capture artifacts:`, err)
+    }
+  }
 
   // Kill the persistent sandbox
   if (session.sandbox) {

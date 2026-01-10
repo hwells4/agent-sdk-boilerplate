@@ -125,3 +125,46 @@ export const STRING_LIMITS = {
   /** Maximum length for error messages */
   MAX_ERROR_MESSAGE_LENGTH: 1_000,
 } as const
+
+// ============================================================================
+// Artifact Limits
+// ============================================================================
+
+/**
+ * Limits for artifact capture and storage
+ */
+export const ARTIFACT_LIMITS = {
+  /** Maximum file size for artifact capture (10MB) */
+  MAX_FILE_SIZE: 10 * 1024 * 1024,
+  /** Maximum number of artifacts to capture per run */
+  MAX_ARTIFACTS_PER_RUN: 50,
+  /** Maximum title length for artifacts */
+  MAX_TITLE_LENGTH: 200,
+} as const
+
+/**
+ * Default patterns for artifact capture.
+ * These patterns exclude system/temp files and focus on user-generated content.
+ */
+export const DEFAULT_ARTIFACT_PATTERNS = [
+  '/home/user/**/*.py',
+  '/home/user/**/*.js',
+  '/home/user/**/*.ts',
+  '/home/user/**/*.json',
+  '/home/user/**/*.html',
+  '/home/user/**/*.css',
+  '/home/user/**/*.md',
+  '/home/user/**/*.txt',
+  '/home/user/**/*.csv',
+  '/home/user/**/*.png',
+  '/home/user/**/*.jpg',
+  '/home/user/**/*.svg',
+] as const
+
+/**
+ * Files to exclude from artifact capture (SDK-generated files)
+ */
+export const ARTIFACT_EXCLUDE_PATTERNS = [
+  'agent.py',
+  'streaming_agent.py',
+] as const
