@@ -5,6 +5,25 @@
  * - TypeScript orchestrates sandbox creation and management
  * - Python runs inside the sandbox with Claude Agent SDK
  * - Best of both worlds: TypeScript integration + mature Python SDK
+ *
+ * ## Sandbox Management Architecture
+ *
+ * This SDK operates in "Ephemeral Mode" - sandboxes are created directly via
+ * the E2B SDK and cleaned up immediately after execution. There is no external
+ * state tracking or database persistence.
+ *
+ * A separate "Managed Mode" exists via the Convex backend (convex/actions/startSandboxRun.ts)
+ * which provides full lifecycle tracking, database persistence, and cron-based cleanup.
+ *
+ * These two modes are currently independent:
+ * - Ephemeral Mode (this file): Direct E2B SDK, cleanup in finally blocks, no Convex
+ * - Managed Mode (Convex): Database-tracked, state machine, cron cleanup
+ *
+ * Sandboxes created via functions in this file are invisible to the Convex cleanup cron.
+ * This is intentional - Ephemeral Mode is designed for simple scripts and CLI tools
+ * where database overhead is unnecessary.
+ *
+ * See CLAUDE.md "Sandbox Management Modes" for guidance on which mode to use.
  */
 
 import { Sandbox } from '@e2b/code-interpreter'
@@ -12,6 +31,8 @@ import { createConsoleStreamHandler, createLineBufferedHandler, StreamCallbacks,
 import { traceAgentExecution, exportTraceContext, shouldSampleTrace } from './observability'
 import { calculateCost, formatCost, parseTokenUsage } from './cost-tracking'
 import { createAgentError, formatAgentError, categorizeError } from './error-tracking'
+import { generatePythonAgentCode } from './python-templates'
+import { DEFAULT_MODEL, E2B_DEFAULTS } from './constants'
 
 export interface AgentConfig {
   prompt: string
@@ -91,7 +112,7 @@ export async function runPythonAgent(config: AgentConfig): Promise<string> {
           traceId: traceContext?.traceId,
         },
       })
-    } catch (err: any) {
+    } catch (err: unknown) {
       const error = createAgentError(
         'sandbox_error',
         'Failed to create E2B sandbox',
@@ -99,7 +120,7 @@ export async function runPythonAgent(config: AgentConfig): Promise<string> {
           prompt: prompt.substring(0, 100),
           executionTime: Date.now() - startTime,
         },
-        err
+        err instanceof Error ? err : new Error(String(err))
       )
       throw new Error(formatAgentError(error))
     }
@@ -109,108 +130,29 @@ export async function runPythonAgent(config: AgentConfig): Promise<string> {
         console.log('Sandbox started. Running Python agent...')
       }
 
-      // Python agent code with ClaudeSDKClient and Braintrust integration
-      const pythonAgentCode = `
-import asyncio
-import json
-import os
-import sys
-
-# Braintrust initialization (optional)
-braintrust_enabled = False
-if os.getenv('BRAINTRUST_API_KEY'):
-    try:
-        import braintrust
-
-        # Initialize Braintrust
-        braintrust.init(
-            api_key=os.getenv('BRAINTRUST_API_KEY'),
-            project=os.getenv('BRAINTRUST_PROJECT_NAME', 'claude-agent-sdk')
-        )
-
-        # Import trace context from parent (TypeScript)
-        trace_context_json = os.getenv('BRAINTRUST_TRACE_CONTEXT')
-        if trace_context_json:
-            context_data = json.loads(trace_context_json)
-            # Note: Context propagation will be enhanced in future iterations
-
-        braintrust_enabled = True
-    except Exception as e:
-        print(f"Warning: Failed to initialize Braintrust: {e}", file=sys.stderr)
-
-from claude_agent_sdk import (
-    ClaudeSDKClient,
-    ClaudeAgentOptions,
-    AssistantMessage,
-    TextBlock,
-    ResultMessage
-)
-
-async def main():
-    result = None
-    usage_data = None
-    prompt = json.loads(${JSON.stringify(JSON.stringify(prompt))})
-
-    # Configure agent with proper permissions for autonomous operation
-    options = ClaudeAgentOptions(
-        allowed_tools=["Read", "Write", "Edit", "Bash", "Glob", "Grep", "WebFetch", "WebSearch"],
-        permission_mode="bypassPermissions",  # Autonomous operation - no permission prompts
-        cwd="/home/user",
-    )
-
-    if braintrust_enabled:
-        # Wrap agent execution in Braintrust span
-        with braintrust.start_span(name="agent_execution") as span:
-            span.log(input=prompt)
-
-            async with ClaudeSDKClient(options=options) as client:
-                await client.query(prompt)
-                async for msg in client.receive_response():
-                    if isinstance(msg, ResultMessage):
-                        result = msg.result
-                        # Extract usage metrics if available
-                        if msg.usage:
-                            usage_data = {
-                                "input_tokens": int(msg.usage.get('input_tokens', 0)),
-                                "output_tokens": int(msg.usage.get('output_tokens', 0)),
-                                "cache_read_input_tokens": int(msg.usage.get('cache_read_input_tokens', 0))
-                            }
-                            span.log(metrics={
-                                "promptTokens": int(usage_data['input_tokens']),
-                                "completionTokens": int(usage_data['output_tokens']),
-                                "cachedTokens": int(usage_data['cache_read_input_tokens']),
-                            })
-
-            span.log(output=result)
-    else:
-        # Run without observability
-        async with ClaudeSDKClient(options=options) as client:
-            await client.query(prompt)
-            async for msg in client.receive_response():
-                if isinstance(msg, ResultMessage):
-                    result = msg.result
-                    # Extract usage metrics if available
-                    if msg.usage:
-                        usage_data = {
-                            "input_tokens": int(msg.usage.get('input_tokens', 0)),
-                            "output_tokens": int(msg.usage.get('output_tokens', 0)),
-                            "cache_read_input_tokens": int(msg.usage.get('cache_read_input_tokens', 0))
-                        }
-
-    # Output result and usage as JSON to stdout for TypeScript parsing
-    output = {
-        "result": result,
-        "usage": usage_data
-    }
-    print(json.dumps(output))
-
-asyncio.run(main())
-`
+      // Generate Python agent code using centralized template generator
+      // This eliminates ~95 lines of duplicated Python code
+      const pythonAgentCode = generatePythonAgentCode(prompt, {
+        braintrustEnabled: !!process.env.BRAINTRUST_API_KEY && shouldTrace,
+      })
 
       // Write and execute the Python agent
       await sandbox.files.write('/home/user/agent.py', pythonAgentCode)
 
-      // Prepare environment variables
+      /**
+       * SECURITY NOTE: OAuth token is passed to sandbox environment.
+       *
+       * This is acceptable for development/demo use cases where:
+       * - E2B sandbox isolation is trusted
+       * - Network egress is not a concern
+       *
+       * For production deployments, consider:
+       * - Implementing a proxy architecture where sandboxes call back to a trusted server
+       * - Using short-lived, scoped tokens if available
+       * - Configuring E2B egress filtering to only allow Claude API endpoints
+       *
+       * See todos/008-pending-p2-oauth-token-exposure.md for detailed analysis.
+       */
       const envs: Record<string, string> = {
         CLAUDE_CODE_OAUTH_TOKEN: oauthToken,
       }
@@ -290,11 +232,11 @@ asyncio.run(main())
         tokenUsage = parseTokenUsage(execution.stdout)
       }
       const cost = calculateCost(
-        'claude-sonnet-4-5-20250929', // Default model
+        DEFAULT_MODEL,
         tokenUsage,
         {
           durationSeconds,
-          cpuCount: 2, // From e2b.toml
+          cpuCount: E2B_DEFAULTS.CPU_COUNT,
         }
       )
 
@@ -457,7 +399,10 @@ asyncio.run(main())
 
       await sandbox.files.write('/home/user/agent.py', pythonAgentCode)
 
-      // Prepare environment variables
+      /**
+       * SECURITY NOTE: OAuth token is passed to sandbox environment.
+       * See runPythonAgent for detailed security considerations.
+       */
       const envs: Record<string, string> = {
         CLAUDE_CODE_OAUTH_TOKEN: oauthToken,
       }
@@ -577,8 +522,9 @@ export async function runPythonAgentStreaming(
         console.log('Sandbox started. Running Python agent with streaming...\n')
       }
 
-      // Store events for batch upload
-      const events: any[] = []
+      // Store events for batch upload with capped buffer to prevent unbounded memory growth
+      const MAX_EVENTS_BUFFER = 100
+      const events: StreamEvent[] = []
       const realtimeMode = observability?.mode === 'realtime'
 
     // Python streaming agent code with ClaudeSDKClient
@@ -727,6 +673,17 @@ if __name__ == "__main__":
         }
       }
 
+      // Create console handler once, outside the callback to avoid repeated allocations
+      const consoleHandler = createConsoleStreamHandler({
+        ...onStream,
+        onResult: (result, durationMs, cost) => {
+          finalResult = result
+          if (onStream?.onResult) {
+            onStream.onResult(result, durationMs, cost)
+          }
+        },
+      })
+
       // Create line-buffered stream handler
       const streamHandler = createLineBufferedHandler((line) => {
         const event = parseStreamEvent(line)
@@ -736,26 +693,24 @@ if __name__ == "__main__":
           return
         }
 
-        // Store event for batch upload
+        // Cap events buffer to prevent unbounded memory growth
+        if (events.length >= MAX_EVENTS_BUFFER) {
+          // Remove oldest half of events when at capacity
+          events.splice(0, Math.floor(MAX_EVENTS_BUFFER / 2))
+        }
         events.push(event)
 
         // Log to Braintrust in real-time if enabled
         logEventToSpan(event)
 
-        // Handle the event with console output
-        const consoleHandler = createConsoleStreamHandler({
-          ...onStream,
-          onResult: (result, durationMs, cost) => {
-            finalResult = result
-            if (onStream?.onResult) {
-              onStream.onResult(result, durationMs, cost)
-            }
-          },
-        })
+        // Handle the event with console output (reuse same handler instance)
         consoleHandler(line)
       })
 
-      // Prepare environment variables
+      /**
+       * SECURITY NOTE: OAuth token is passed to sandbox environment.
+       * See runPythonAgent for detailed security considerations.
+       */
       const envs: Record<string, string> = {
         CLAUDE_CODE_OAUTH_TOKEN: oauthToken,
       }
@@ -797,11 +752,11 @@ if __name__ == "__main__":
 
       // Calculate cost
       const cost = calculateCost(
-        'claude-sonnet-4-5-20250929',
+        DEFAULT_MODEL,
         tokenUsage,
         {
           durationSeconds,
-          cpuCount: 2,
+          cpuCount: E2B_DEFAULTS.CPU_COUNT,
         }
       )
 

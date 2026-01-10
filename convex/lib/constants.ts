@@ -58,3 +58,13 @@ export const MAX_USER_ID_LENGTH = 100;
  */
 export const MAX_PROMPT_LENGTH = 50000;
 
+// ============================================================================
+// Rate Limiting
+// ============================================================================
+
+/**
+ * Maximum sandbox runs per user per minute
+ * Used for rate limiting in startSandboxRun action
+ */
+export const RATE_LIMIT_MAX_RUNS_PER_MINUTE = 10;
+

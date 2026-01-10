@@ -14,15 +14,20 @@
 
 import { v4 as uuidv4 } from 'uuid'
 import { Sandbox } from '@e2b/code-interpreter'
-import { getBraintrustLogger } from './observability'
+import { getBraintrustLogger, BraintrustSpan } from './observability'
 import { AgentConfig } from './agent'
+
+// Session TTL and cleanup configuration
+const SESSION_TTL_MS = 30 * 60 * 1000  // 30 minutes
+const CLEANUP_INTERVAL_MS = 60 * 1000  // Check every minute
 
 export interface ConversationSession {
   sessionId: string
   traceId?: string
-  span?: any  // Store span reference
+  span?: BraintrustSpan  // Store span reference
   sandbox?: Sandbox  // Keep sandbox alive across turns
   createdAt: Date
+  lastActivityAt: number  // Timestamp for TTL tracking
   turnCount: number
   conversationHistory: Array<{turnId: number, prompt: string, response: string}>
 }
@@ -38,6 +43,21 @@ export interface SessionHooks {
 
 const activeSessions = new Map<string, ConversationSession>()
 
+// Periodic cleanup of expired sessions
+setInterval(async () => {
+  const now = Date.now()
+  for (const [sessionId, session] of activeSessions) {
+    if (now - session.lastActivityAt > SESSION_TTL_MS) {
+      try {
+        await endSession(sessionId)
+      } catch {
+        // Session may have already been cleaned up
+        activeSessions.delete(sessionId)
+      }
+    }
+  }
+}, CLEANUP_INTERVAL_MS)
+
 /**
  * Create a new conversation session with Braintrust tracing.
  *
@@ -49,9 +69,11 @@ const activeSessions = new Map<string, ConversationSession>()
  * @returns New session object
  */
 export async function createSession(timeout: number = 600): Promise<ConversationSession> {
+  const now = Date.now()
   const session: ConversationSession = {
     sessionId: uuidv4(),
     createdAt: new Date(),
+    lastActivityAt: now,
     turnCount: 0,
     conversationHistory: [],
   }
@@ -118,11 +140,14 @@ export async function executeTurn(
     throw new Error(`Session ${sessionId} has no active sandbox`)
   }
 
+  // Update last activity time for TTL tracking
+  session.lastActivityAt = Date.now()
+
   session.turnCount++
   const turnId = session.turnCount
 
   const logger = getBraintrustLogger()
-  const executeWithSpan = async (span?: any) => {
+  const executeWithSpan = async (span?: BraintrustSpan) => {
     if (span) {
       span.log({
         input: prompt,
@@ -228,6 +253,10 @@ asyncio.run(main())
     let result = ''
     const toolUses: Array<{name: string, input: unknown}> = []
 
+    /**
+     * SECURITY NOTE: OAuth token is passed to sandbox environment.
+     * See agent.ts runPythonAgent for detailed security considerations.
+     */
     const execution = await session.sandbox!.commands.run(
       'python3 /home/user/turn_agent.py',
       {
@@ -347,7 +376,9 @@ export async function endSession(sessionId: string): Promise<void> {
         conversationLength: session.conversationHistory.length,
       }
     })
-    session.span.end()
+    if (session.span.end) {
+      session.span.end()
+    }
   }
 
   activeSessions.delete(sessionId)

@@ -15,6 +15,7 @@ import {
   validateError,
 } from "./lib/validators";
 import { emptyPaginationResult } from "./lib/pagination";
+import { RATE_LIMIT_MAX_RUNS_PER_MINUTE } from "./lib/constants";
 
 // ============================================================================
 // Internal Helper Functions (not exported)
@@ -28,7 +29,6 @@ type SandboxRunUpdateArgs = {
   status?: SandboxStatus;
   finishedAt?: number;
   lastActivityAt?: number;
-  e2bCost?: number;
   error?: { message: string; code?: string; details?: string };
 };
 
@@ -94,7 +94,6 @@ async function performSandboxRunUpdate(
       status: args.status,
       finishedAt: args.finishedAt,
       lastActivityAt: args.lastActivityAt,
-      e2bCost: args.e2bCost,
       error: args.error,
     }).filter(([_, value]) => value !== undefined)
   );
@@ -171,7 +170,6 @@ export const create = mutation({
  * @param status - Optional new status (will be validated)
  * @param finishedAt - Optional finished timestamp
  * @param lastActivityAt - Optional last activity timestamp
- * @param e2bCost - Optional E2B cost in dollars
  * @param error - Optional error object
  */
 export const update = mutation({
@@ -181,7 +179,6 @@ export const update = mutation({
     status: v.optional(sandboxStatusValidator),
     finishedAt: v.optional(v.number()),
     lastActivityAt: v.optional(v.number()),
-    e2bCost: v.optional(v.number()),
     error: v.optional(
       v.object({
         message: v.string(),
@@ -209,7 +206,6 @@ export const update = mutation({
       status: args.status,
       finishedAt: args.finishedAt,
       lastActivityAt: args.lastActivityAt,
-      e2bCost: args.e2bCost,
       error: args.error,
     });
   },
@@ -263,6 +259,9 @@ export const listByWorkspace = query({
 
 /**
  * List all sandbox runs for a thread
+ * Uses by_thread_workspace composite index for efficient queries that scale
+ * with the user's workspace count, not total runs for the thread.
+ *
  * @param threadId - The thread ID
  * @returns Array of sandbox runs the user has access to
  */
@@ -277,22 +276,28 @@ export const listByThread = query({
       return [];
     }
 
-    // Get all sandbox runs for this thread and user's workspace memberships in parallel
-    const [runs, memberships] = await Promise.all([
-      ctx.db
-        .query("sandboxRuns")
-        .withIndex("by_thread", (q) => q.eq("threadId", args.threadId))
-        .collect(),
-      ctx.db
-        .query("workspaceMembers")
-        .withIndex("by_user", (q) => q.eq("userId", identity.subject))
-        .collect(),
-    ]);
+    // Get user's workspace memberships
+    const memberships = await ctx.db
+      .query("workspaceMembers")
+      .withIndex("by_user", (q) => q.eq("userId", identity.subject))
+      .collect();
 
-    const memberWorkspaceIds = new Set(memberships.map((m) => m.workspaceId.toString()));
+    const memberWorkspaceIds = memberships.map((m) => m.workspaceId);
 
-    // Filter runs to only those in workspaces the user belongs to
-    return runs.filter((run) => memberWorkspaceIds.has(run.workspaceId.toString()));
+    // Query per workspace using composite index (parallel)
+    // This scales with user's workspace count, not total runs for thread
+    const runsByWorkspace = await Promise.all(
+      memberWorkspaceIds.map((workspaceId) =>
+        ctx.db
+          .query("sandboxRuns")
+          .withIndex("by_thread_workspace", (q) =>
+            q.eq("threadId", args.threadId).eq("workspaceId", workspaceId)
+          )
+          .collect()
+      )
+    );
+
+    return runsByWorkspace.flat();
   },
 });
 
@@ -358,7 +363,6 @@ export const internalCreate = internalMutation({
  * @param status - Optional new status (will be validated)
  * @param finishedAt - Optional finished timestamp
  * @param lastActivityAt - Optional last activity timestamp
- * @param e2bCost - Optional E2B cost in dollars
  * @param error - Optional error object
  * @param skipTerminalStates - If true, silently skip when sandbox already in terminal state (for cron job)
  * @returns Object with updated/skipped flags and optional reason
@@ -370,7 +374,6 @@ export const internalUpdate = internalMutation({
     status: v.optional(sandboxStatusValidator),
     finishedAt: v.optional(v.number()),
     lastActivityAt: v.optional(v.number()),
-    e2bCost: v.optional(v.number()),
     error: v.optional(
       v.object({
         message: v.string(),
@@ -395,7 +398,6 @@ export const internalUpdate = internalMutation({
         status: args.status,
         finishedAt: args.finishedAt,
         lastActivityAt: args.lastActivityAt,
-        e2bCost: args.e2bCost,
         error: args.error,
       },
       { skipTerminalStates: args.skipTerminalStates ?? false }
@@ -492,9 +494,13 @@ export const internalGet = internalQuery({
  * Uses composite index by_createdBy_startedAt for efficient O(k) queries
  * where k = number of matching runs, instead of O(n) where n = all runs.
  *
+ * Performance: Uses .take(RATE_LIMIT + 1) instead of .collect() to ensure
+ * constant memory usage O(1) regardless of how many runs a power user has.
+ * For rate limiting, we only need to know if count >= limit, not the exact count.
+ *
  * @param userId - The user ID to count runs for
  * @param sinceMs - Time window in milliseconds (e.g., 60000 for last minute)
- * @returns Count of sandbox runs started by user within the time window
+ * @returns Count of sandbox runs started by user within the time window (capped at RATE_LIMIT + 1)
  */
 export const internalCountRecentByUser = internalQuery({
   args: {
@@ -508,12 +514,15 @@ export const internalCountRecentByUser = internalQuery({
     // by_createdBy_startedAt: ["createdBy", "startedAt"]
     // - eq("createdBy", userId) filters to this user's runs
     // - gt("startedAt", cutoff) filters to recent runs only
+    //
+    // Use .take(limit + 1) instead of .collect() for constant memory usage.
+    // For rate limiting we only need to know if count >= limit, not exact count.
     const recentRuns = await ctx.db
       .query("sandboxRuns")
       .withIndex("by_createdBy_startedAt", (q) =>
         q.eq("createdBy", args.userId).gt("startedAt", cutoff)
       )
-      .collect();
+      .take(RATE_LIMIT_MAX_RUNS_PER_MINUTE + 1);
 
     return recentRuns.length;
   },

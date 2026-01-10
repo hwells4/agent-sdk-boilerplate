@@ -32,7 +32,6 @@ import { emptyPaginationResult } from "./lib/pagination";
  * @param contentType - MIME type of the artifact
  * @param size - Size in bytes
  * @param sandboxPath - Optional path within the sandbox filesystem
- * @param previewText - Optional preview/snippet of the content
  * @returns The ID of the created artifact
  */
 export const create = mutation({
@@ -45,7 +44,6 @@ export const create = mutation({
     contentType: v.string(),
     size: v.number(),
     sandboxPath: v.optional(v.string()),
-    previewText: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<Id<"artifacts">> => {
     // Check workspace membership via sandbox run
@@ -69,7 +67,6 @@ export const create = mutation({
       contentType: args.contentType,
       size: args.size,
       sandboxPath: args.sandboxPath,
-      previewText: args.previewText,
       reviewState: "pending",
       createdAt: now,
     });
@@ -95,7 +92,6 @@ export const internalCreate = internalMutation({
     contentType: v.string(),
     size: v.number(),
     sandboxPath: v.optional(v.string()),
-    previewText: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<Id<"artifacts">> => {
     // Validate input lengths first (fail fast before DB queries)
@@ -132,7 +128,6 @@ export const internalCreate = internalMutation({
       contentType: args.contentType,
       size: args.size,
       sandboxPath: args.sandboxPath,
-      previewText: args.previewText,
       reviewState: "pending",
       createdAt: now,
     });

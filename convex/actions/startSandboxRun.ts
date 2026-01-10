@@ -4,7 +4,7 @@ import { v } from "convex/values";
 import { action } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { Id } from "../_generated/dataModel";
-import { IDLE_TIMEOUT_MS, MAX_PROMPT_LENGTH } from "../lib/constants";
+import { IDLE_TIMEOUT_MS, MAX_PROMPT_LENGTH, RATE_LIMIT_MAX_RUNS_PER_MINUTE } from "../lib/constants";
 import { Sandbox } from "@e2b/code-interpreter";
 
 /**
@@ -53,13 +53,13 @@ export const startSandboxRun = action({
       throw new Error(`Prompt exceeds maximum length of ${MAX_PROMPT_LENGTH} characters`);
     }
 
-    // Rate limit: max 10 sandboxes per minute per user
+    // Rate limit: max RATE_LIMIT_MAX_RUNS_PER_MINUTE sandboxes per minute per user
     const recentCount = await ctx.runQuery(internal.sandboxRuns.internalCountRecentByUser, {
       userId: identity.subject,
       sinceMs: 60 * 1000,
     });
-    if (recentCount >= 10) {
-      throw new Error("Rate limit exceeded: maximum 10 sandbox runs per minute");
+    if (recentCount >= RATE_LIMIT_MAX_RUNS_PER_MINUTE) {
+      throw new Error(`Rate limit exceeded: maximum ${RATE_LIMIT_MAX_RUNS_PER_MINUTE} sandbox runs per minute`);
     }
 
     const templateId = process.env.E2B_TEMPLATE_ID;
@@ -93,10 +93,17 @@ export const startSandboxRun = action({
         },
       });
 
-      // Step 3: Update sandboxRun with sandboxId and status 'running'
+      // Step 2.5: Store sandboxId immediately (still in booting state)
+      // This ensures the cron job can clean up orphaned sandboxes if the next mutation fails
       await ctx.runMutation(internal.sandboxRuns.internalUpdate, {
         sandboxRunId,
         sandboxId: sandbox.sandboxId,
+        lastActivityAt: Date.now(),
+      });
+
+      // Step 3: Transition to running status
+      await ctx.runMutation(internal.sandboxRuns.internalUpdate, {
+        sandboxRunId,
         status: "running",
         lastActivityAt: Date.now(),
       });

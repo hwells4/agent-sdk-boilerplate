@@ -6,21 +6,35 @@
  */
 
 /**
- * Stream event types emitted by Python agents
+ * Token usage information from Claude API
  */
-export interface StreamEvent {
-  type: 'start' | 'text' | 'thinking' | 'tool_use' | 'tool_result' | 'error' | 'result' | 'complete'
-  data: any
+export interface TokenUsage {
+  input_tokens: number
+  output_tokens: number
+  cache_read_input_tokens: number
 }
+
+/**
+ * Stream event types emitted by Python agents (discriminated union)
+ */
+export type StreamEvent =
+  | { type: 'start'; data: { prompt: string } }
+  | { type: 'text'; data: { text: string } }
+  | { type: 'thinking'; data: { thinking: string; signature?: string } }
+  | { type: 'tool_use'; data: { id: string; name: string; input: unknown } }
+  | { type: 'tool_result'; data: { tool_use_id: string; content: string; is_error?: boolean } }
+  | { type: 'error'; data: { error: string; message: string } }
+  | { type: 'result'; data: { result: string; duration_ms: number; cost: number; usage?: TokenUsage } }
+  | { type: 'complete'; data: { status: string; result?: string } }
 
 /**
  * Optional callbacks for different stream event types
  */
 export interface StreamCallbacks {
-  onStart?: (data: any) => void
+  onStart?: (data: { prompt: string }) => void
   onText?: (text: string) => void
   onThinking?: (thinking: string, signature: string) => void
-  onToolUse?: (id: string, name: string, input: any) => void
+  onToolUse?: (id: string, name: string, input: unknown) => void
   onToolResult?: (toolUseId: string, content: string, isError: boolean) => void
   onError?: (error: string, message: string) => void
   onResult?: (result: string, durationMs: number, cost: number) => void
@@ -30,7 +44,7 @@ export interface StreamCallbacks {
 /**
  * Format tool input for display (truncate if too long)
  */
-function formatToolInput(input: any, maxLength: number = 100): string {
+function formatToolInput(input: unknown, maxLength: number = 100): string {
   const str = JSON.stringify(input)
   if (str.length <= maxLength) return str
   return str.substring(0, maxLength - 3) + '...'
@@ -157,7 +171,8 @@ export function createConsoleStreamHandler(callbacks?: StreamCallbacks) {
 
       default:
         // Unknown event type, log for debugging
-        console.log(`[Unknown event: ${event.type}]`)
+        // This case handles unexpected event types from parseStreamEvent's unsafe cast
+        console.log(`[Unknown event: ${(event as { type: string }).type}]`)
     }
   }
 }
@@ -221,92 +236,3 @@ export function createLineBufferedHandler(
   }
 }
 
-/**
- * Create a simple text-only stream handler (no colors)
- *
- * Useful for:
- * - Non-TTY environments
- * - Log files
- * - CI/CD pipelines
- *
- * @param callbacks - Optional callbacks for each event type
- * @returns Handler function for stdout data
- */
-export function createPlainStreamHandler(callbacks?: StreamCallbacks) {
-  return (data: string) => {
-    const event = parseStreamEvent(data)
-    if (!event) {
-      process.stdout.write(data)
-      return
-    }
-
-    switch (event.type) {
-      case 'start':
-        console.log('🚀 Starting agent...')
-        if (callbacks?.onStart) callbacks.onStart(event.data)
-        break
-
-      case 'text':
-        process.stdout.write('💬 ')
-        process.stdout.write(event.data.text)
-        if (callbacks?.onText) callbacks.onText(event.data.text)
-        break
-
-      case 'thinking':
-        const preview = event.data.thinking.substring(0, 100)
-        console.log(`🤔 Thinking: ${preview}...`)
-        if (callbacks?.onThinking) {
-          callbacks.onThinking(event.data.thinking, event.data.signature || '')
-        }
-        break
-
-      case 'tool_use':
-        const input = formatToolInput(event.data.input)
-        console.log(`🔧 Tool: ${event.data.name}(${input})`)
-        if (callbacks?.onToolUse) {
-          callbacks.onToolUse(event.data.id, event.data.name, event.data.input)
-        }
-        break
-
-      case 'tool_result':
-        const result = event.data.content?.substring(0, 80) || ''
-        console.log(`📦 Result: ${result}...`)
-        if (callbacks?.onToolResult) {
-          callbacks.onToolResult(
-            event.data.tool_use_id,
-            event.data.content,
-            event.data.is_error || false
-          )
-        }
-        break
-
-      case 'error':
-        console.log(`❌ Error: ${event.data.message}`)
-        if (callbacks?.onError) {
-          callbacks.onError(event.data.error, event.data.message)
-        }
-        break
-
-      case 'result':
-        const cost = event.data.cost?.toFixed(4) || 'N/A'
-        const duration = ((event.data.duration_ms || 0) / 1000).toFixed(2)
-        console.log(`✅ Complete (${duration}s, $${cost})`)
-        if (callbacks?.onResult) {
-          callbacks.onResult(
-            event.data.result,
-            event.data.duration_ms || 0,
-            event.data.cost || 0
-          )
-        }
-        break
-
-      case 'complete':
-        const icon = event.data.status === 'success' ? '✨' : '⚠️'
-        console.log(`${icon} Agent finished: ${event.data.status}`)
-        if (callbacks?.onComplete) {
-          callbacks.onComplete(event.data.status, event.data.result)
-        }
-        break
-    }
-  }
-}

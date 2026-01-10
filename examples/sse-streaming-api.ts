@@ -13,11 +13,46 @@
  */
 
 import 'dotenv/config'
+import { randomUUID } from 'crypto'
 import { Sandbox } from '@e2b/code-interpreter'
 import express, { Request, Response } from 'express'
 
 const app = express()
 const PORT = process.env.PORT || 3000
+
+/**
+ * CORS Configuration
+ *
+ * SECURITY NOTE: This is a demo/example setup. For production deployments:
+ * - Use proper CSRF tokens (e.g., csurf middleware)
+ * - Implement authentication on sensitive endpoints
+ * - Consider using a reverse proxy with additional security headers
+ * - Add your production domains to the ALLOWED_ORIGINS list
+ *
+ * The origin whitelist below restricts cross-origin requests to known development URLs.
+ */
+const ALLOWED_ORIGINS = [
+  'http://localhost:3000',
+  'http://localhost:8080',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:8080',
+  // Add production domains here when deploying
+]
+
+/**
+ * Helper to set CORS headers with origin validation
+ */
+function setCorsHeaders(req: Request, res: Response): void {
+  const origin = req.get('Origin')
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin)
+  } else if (!origin) {
+    // Same-origin request (no Origin header), allow from default
+    res.setHeader('Access-Control-Allow-Origin', `http://localhost:${PORT}`)
+  }
+  // For disallowed origins, we simply don't set the header,
+  // which causes the browser to block the response
+}
 
 app.use(express.json())
 
@@ -303,12 +338,12 @@ app.get('/', (_req: Request, res: Response) => {
 /**
  * SSE endpoint for streaming basic commands
  */
-app.get('/api/stream/command', async (_req: Request, res: Response) => {
+app.get('/api/stream/command', async (req: Request, res: Response) => {
   // Set SSE headers
   res.setHeader('Content-Type', 'text/event-stream')
   res.setHeader('Cache-Control', 'no-cache')
   res.setHeader('Connection', 'keep-alive')
-  res.setHeader('Access-Control-Allow-Origin', '*')
+  setCorsHeaders(req, res)
 
   try {
     const sandbox = await Sandbox.create()
@@ -345,7 +380,7 @@ app.get('/api/stream/python', async (req: Request, res: Response) => {
   res.setHeader('Content-Type', 'text/event-stream')
   res.setHeader('Cache-Control', 'no-cache')
   res.setHeader('Connection', 'keep-alive')
-  res.setHeader('Access-Control-Allow-Origin', '*')
+  setCorsHeaders(req, res)
 
   try {
     const sandbox = await Sandbox.create()
@@ -392,11 +427,11 @@ print("Complete!", flush=True)
 /**
  * SSE endpoint for streaming structured data
  */
-app.get('/api/stream/structured', async (_req: Request, res: Response) => {
+app.get('/api/stream/structured', async (req: Request, res: Response) => {
   res.setHeader('Content-Type', 'text/event-stream')
   res.setHeader('Cache-Control', 'no-cache')
   res.setHeader('Connection', 'keep-alive')
-  res.setHeader('Access-Control-Allow-Origin', '*')
+  setCorsHeaders(req, res)
 
   try {
     const sandbox = await Sandbox.create()
@@ -481,7 +516,7 @@ app.post('/api/stream/agent/init', async (req: Request, res: Response) => {
     return
   }
 
-  const sessionId = Math.random().toString(36).substring(7)
+  const sessionId = randomUUID()
   agentSessions.set(sessionId, { prompt, timestamp: Date.now() })
 
   // Clean up old sessions (older than 5 minutes)
@@ -512,7 +547,7 @@ app.get('/api/stream/agent/:sessionId', async (req: Request, res: Response) => {
   res.setHeader('Content-Type', 'text/event-stream')
   res.setHeader('Cache-Control', 'no-cache')
   res.setHeader('Connection', 'keep-alive')
-  res.setHeader('Access-Control-Allow-Origin', '*')
+  setCorsHeaders(req, res)
 
   const templateId = process.env.E2B_TEMPLATE_ID
   const oauthToken = process.env.CLAUDE_CODE_OAUTH_TOKEN

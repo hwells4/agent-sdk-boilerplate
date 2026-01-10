@@ -8,14 +8,25 @@
 import { initLogger } from 'braintrust'
 
 type BraintrustLogger = ReturnType<typeof initLogger>
-type BraintrustSpan = any // The Span type from braintrust
+
+/**
+ * Braintrust span interface for tracing.
+ * Minimal interface that captures the methods we use.
+ */
+export interface BraintrustSpan {
+  id: string
+  span_id?: string
+  log(data: Record<string, unknown>): void
+  end?(): void
+}
 
 let logger: BraintrustLogger | null = null
+let initialized = false
 
 /**
  * Initialize Braintrust observability.
  *
- * This is called automatically when the module loads.
+ * Called lazily on first access via getBraintrustLogger().
  * Requires BRAINTRUST_API_KEY environment variable.
  *
  * @returns Logger instance or null if disabled
@@ -38,8 +49,9 @@ export function initializeBraintrust(): BraintrustLogger | null {
     })
     console.log('✅ Braintrust observability enabled')
     return logger
-  } catch (error: any) {
-    console.error('❌ Failed to initialize Braintrust:', error.message)
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error('❌ Failed to initialize Braintrust:', message)
     console.log('   Agent execution will continue without observability')
     return null
   }
@@ -48,9 +60,16 @@ export function initializeBraintrust(): BraintrustLogger | null {
 /**
  * Get the current Braintrust logger instance.
  *
- * @returns Logger instance or null if not initialized
+ * Uses lazy initialization - the logger is only initialized on first access.
+ * This avoids import-time side effects and allows tests to run without API keys.
+ *
+ * @returns Logger instance or null if disabled
  */
 export function getBraintrustLogger(): BraintrustLogger | null {
+  if (!initialized) {
+    logger = initializeBraintrust()
+    initialized = true
+  }
   return logger
 }
 
@@ -67,22 +86,25 @@ export function getBraintrustLogger(): BraintrustLogger | null {
  */
 export async function traceAgentExecution<T>(
   name: string,
-  metadata: Record<string, any>,
+  metadata: Record<string, unknown>,
   fn: (span: BraintrustSpan | null) => Promise<T>
 ): Promise<T> {
-  if (!logger) {
+  const currentLogger = getBraintrustLogger()
+
+  if (!currentLogger) {
     // Graceful degradation: run function without observability
     return fn(null)
   }
 
   try {
-    return await logger.traced(async (span: BraintrustSpan) => {
+    return await currentLogger.traced(async (span: BraintrustSpan) => {
       span.log({ metadata })
       return fn(span)
     }, { name })
-  } catch (error: any) {
+  } catch (error: unknown) {
     // If tracing fails, continue execution
-    console.error('⚠️  Tracing error:', error.message)
+    const message = error instanceof Error ? error.message : String(error)
+    console.error('⚠️  Tracing error:', message)
     console.log('   Continuing execution without tracing')
     return fn(null)
   }
@@ -97,7 +119,13 @@ export async function traceAgentExecution<T>(
  * @param span - Braintrust span
  * @returns Serializable trace context or null
  */
-export async function exportTraceContext(span: BraintrustSpan | null): Promise<any> {
+export interface TraceContext {
+  traceId: string
+  spanId: string | undefined
+  projectName: string
+}
+
+export async function exportTraceContext(span: BraintrustSpan | null): Promise<TraceContext | null> {
   if (!span) return null
 
   try {
@@ -107,7 +135,7 @@ export async function exportTraceContext(span: BraintrustSpan | null): Promise<a
       spanId: span.span_id,
       projectName: process.env.BRAINTRUST_PROJECT_NAME || 'claude-agent-sdk',
     }
-  } catch (error) {
+  } catch (error: unknown) {
     console.warn('⚠️  Failed to export trace context:', error)
     return null
   }
@@ -162,11 +190,9 @@ process.on('beforeExit', async () => {
     try {
       await logger.flush()
       console.log('✅ Braintrust traces flushed successfully')
-    } catch (error: any) {
-      console.error('❌ Failed to flush traces:', error.message)
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error)
+      console.error('❌ Failed to flush traces:', message)
     }
   }
 })
-
-// Initialize on module load
-logger = initializeBraintrust()

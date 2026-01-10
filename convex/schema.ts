@@ -47,7 +47,6 @@ export default defineSchema({
     lastActivityAt: v.number(),
     maxDurationMs: v.optional(v.number()),
     idleTimeoutMs: v.optional(v.number()),
-    e2bCost: v.optional(v.number()), // TODO: Implement E2B cost tracking
     error: v.optional(
       v.object({
         message: v.string(),
@@ -57,6 +56,7 @@ export default defineSchema({
     ),
   })
     .index("by_thread", ["threadId"])
+    .index("by_thread_workspace", ["threadId", "workspaceId"])
     .index("by_workspace", ["workspaceId"])
     .index("by_status", ["status"])
     .index("by_status_activity", ["status", "lastActivityAt"])
@@ -74,7 +74,6 @@ export default defineSchema({
     contentType: v.string(),
     size: v.number(),
     sandboxPath: v.optional(v.string()),
-    previewText: v.optional(v.string()), // TODO: Implement artifact preview generation
     reviewState: reviewStateValidator,
     reviewedBy: v.optional(v.string()),
     reviewedAt: v.optional(v.number()),
