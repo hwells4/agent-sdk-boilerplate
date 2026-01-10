@@ -33,6 +33,15 @@ import { calculateCost, formatCost, parseTokenUsage } from './cost-tracking'
 import { createAgentError, formatAgentError, categorizeError } from './error-tracking'
 import { generatePythonAgentCode } from './python-templates'
 import { DEFAULT_MODEL, E2B_DEFAULTS } from './constants'
+import {
+  ConvexConfig,
+  createSandboxRunRecord,
+  markSandboxRunning,
+  markSandboxSucceeded,
+  markSandboxFailed,
+  persistCostData,
+  createHeartbeat,
+} from './convex-integration'
 
 export interface AgentConfig {
   prompt: string
@@ -41,6 +50,8 @@ export interface AgentConfig {
   observability?: {
     sample?: number  // Sample rate (0.0-1.0), overrides BRAINTRUST_SAMPLE_RATE env var
   }
+  /** Optional Convex integration for managed mode with lifecycle tracking */
+  convex?: ConvexConfig
 }
 
 export interface StreamingAgentConfig extends AgentConfig {
@@ -70,7 +81,7 @@ export interface AgentResult {
  * @returns The agent's output
  */
 export async function runPythonAgent(config: AgentConfig): Promise<string> {
-  const { prompt, timeout = 120, verbose = false } = config
+  const { prompt, timeout = 120, verbose = false, convex } = config
 
   // Check sampling (deterministic hash-based)
   const shouldTrace = shouldSampleTrace(prompt, config.observability?.sample)
@@ -102,6 +113,20 @@ export async function runPythonAgent(config: AgentConfig): Promise<string> {
     // Export trace context for sandbox (only if we're sampling)
     const traceContext = shouldTrace ? await exportTraceContext(span) : null
 
+    // Create Convex sandbox run record if configured (managed mode)
+    let sandboxRunId: string | undefined
+    if (convex) {
+      try {
+        sandboxRunId = await createSandboxRunRecord(convex, prompt, traceContext?.traceId)
+        if (verbose) {
+          console.log(`[Convex] Created sandbox run record: ${sandboxRunId}`)
+        }
+      } catch (err) {
+        // Log but don't fail - Convex issues shouldn't block agent execution
+        console.error('[Convex] Failed to create sandbox run record:', err)
+      }
+    }
+
     // Create sandbox from Python-based template
     let sandbox: Sandbox
     try {
@@ -109,7 +134,7 @@ export async function runPythonAgent(config: AgentConfig): Promise<string> {
         timeoutMs: timeout * 1000,
         metadata: {
           prompt: prompt.substring(0, 100), // For debugging
-          traceId: traceContext?.traceId,
+          ...(traceContext?.traceId && { traceId: traceContext.traceId }),
         },
       })
     } catch (err: unknown) {
@@ -128,6 +153,13 @@ export async function runPythonAgent(config: AgentConfig): Promise<string> {
     try {
       if (verbose) {
         console.log('Sandbox started. Running Python agent...')
+      }
+
+      // Mark sandbox as running in Convex (with sandbox ID for cleanup)
+      if (convex && sandboxRunId) {
+        markSandboxRunning(convex, sandboxRunId, sandbox.sandboxId).catch((err) => {
+          console.error('[Convex] Failed to mark sandbox running:', err)
+        })
       }
 
       // Generate Python agent code using centralized template generator
@@ -186,7 +218,7 @@ export async function runPythonAgent(config: AgentConfig): Promise<string> {
           `Agent execution failed with exit code ${execution.exitCode}`,
           {
             prompt: prompt.substring(0, 100),
-            sandboxId: sandbox.id,
+            sandboxId: sandbox.sandboxId,
             executionTime: endTime - startTime,
             stdout: execution.stdout,
             stderr: execution.stderr,
@@ -205,6 +237,18 @@ export async function runPythonAgent(config: AgentConfig): Promise<string> {
             metadata: {
               sampledOut: !shouldTrace,  // Indicate this was sampled out but logged due to error
             }
+          })
+        }
+
+        // Mark sandbox run as failed in Convex
+        if (convex && sandboxRunId) {
+          markSandboxFailed(
+            convex,
+            sandboxRunId,
+            `Agent execution failed with exit code ${execution.exitCode}`,
+            errorType
+          ).catch((err) => {
+            console.error('[Convex] Failed to mark sandbox failed:', err)
           })
         }
 
@@ -229,7 +273,12 @@ export async function runPythonAgent(config: AgentConfig): Promise<string> {
       } catch (error) {
         // Fallback: if JSON parsing fails, treat stdout as plain text result
         result = execution.stdout.trim()
-        tokenUsage = parseTokenUsage(execution.stdout)
+        const parsed = parseTokenUsage(execution.stdout)
+        tokenUsage = {
+          promptTokens: parsed.promptTokens,
+          completionTokens: parsed.completionTokens,
+          cachedTokens: parsed.cachedTokens ?? 0,
+        }
       }
       const cost = calculateCost(
         DEFAULT_MODEL,
@@ -264,6 +313,18 @@ export async function runPythonAgent(config: AgentConfig): Promise<string> {
       // Display cost to user if verbose
       if (verbose && cost.total > 0) {
         console.log('\n' + formatCost(cost))
+      }
+
+      // Persist cost data and mark succeeded in Convex
+      if (convex && sandboxRunId) {
+        const durationMs = endTime - startTime
+        // Fire and forget - don't block return on Convex writes
+        Promise.all([
+          persistCostData(convex, sandboxRunId, cost, tokenUsage, durationMs),
+          markSandboxSucceeded(convex, sandboxRunId, result),
+        ]).catch((err) => {
+          console.error('[Convex] Failed to persist success state:', err)
+        })
       }
 
       if (verbose) {
@@ -316,7 +377,7 @@ export async function runPythonAgentDetailed(config: AgentConfig): Promise<Agent
     const sandbox = await Sandbox.create(templateId, {
       timeoutMs: timeout * 1000,
       metadata: {
-        traceId: traceContext?.traceId,
+        ...(traceContext?.traceId && { traceId: traceContext.traceId }),
       },
     })
 
@@ -479,7 +540,7 @@ asyncio.run(main())
 export async function runPythonAgentStreaming(
   config: StreamingAgentConfig
 ): Promise<string> {
-  const { prompt, timeout = 120, verbose = false, onStream, observability } = config
+  const { prompt, timeout = 120, verbose = false, onStream, observability, convex } = config
 
   // Check sampling (deterministic hash-based)
   const shouldTrace = shouldSampleTrace(prompt, observability?.sample)
@@ -509,11 +570,25 @@ export async function runPythonAgentStreaming(
     // Export trace context for sandbox (only if we're sampling)
     const traceContext = shouldTrace ? await exportTraceContext(span) : null
 
+    // Create Convex sandbox run record if configured (managed mode)
+    let sandboxRunId: string | undefined
+    if (convex) {
+      try {
+        sandboxRunId = await createSandboxRunRecord(convex, prompt, traceContext?.traceId)
+        if (verbose) {
+          console.log(`[Convex] Created sandbox run record: ${sandboxRunId}`)
+        }
+      } catch (err) {
+        // Log but don't fail - Convex issues shouldn't block agent execution
+        console.error('[Convex] Failed to create sandbox run record:', err)
+      }
+    }
+
     const sandbox = await Sandbox.create(templateId, {
       timeoutMs: timeout * 1000,
       metadata: {
         prompt: prompt.substring(0, 100),
-        traceId: traceContext?.traceId,
+        ...(traceContext?.traceId && { traceId: traceContext.traceId }),
       },
     })
 
@@ -521,6 +596,18 @@ export async function runPythonAgentStreaming(
       if (verbose) {
         console.log('Sandbox started. Running Python agent with streaming...\n')
       }
+
+      // Mark sandbox as running in Convex (with sandbox ID for cleanup)
+      if (convex && sandboxRunId) {
+        markSandboxRunning(convex, sandboxRunId, sandbox.sandboxId).catch((err) => {
+          console.error('[Convex] Failed to mark sandbox running:', err)
+        })
+      }
+
+      // Create heartbeat function for long-running streaming tasks
+      const heartbeat = convex && sandboxRunId
+        ? createHeartbeat(convex, sandboxRunId)
+        : () => {} // No-op if Convex not configured
 
       // Store events for batch upload with capped buffer to prevent unbounded memory growth
       const MAX_EVENTS_BUFFER = 100
@@ -693,6 +780,10 @@ if __name__ == "__main__":
           return
         }
 
+        // Heartbeat on each event to keep sandbox alive in Convex
+        // (throttled internally to prevent excessive updates)
+        heartbeat()
+
         // Cap events buffer to prevent unbounded memory growth
         if (events.length >= MAX_EVENTS_BUFFER) {
           // Remove oldest half of events when at capacity
@@ -821,6 +912,29 @@ if __name__ == "__main__":
         console.log('\n' + formatCost(cost))
       }
 
+      // Check if execution ended with an error
+      const errorEvent = events.find(e => e.type === 'error')
+      const hasError = errorEvent || !finalResult
+
+      // Persist to Convex based on success/failure
+      if (convex && sandboxRunId) {
+        const durationMs = endTime - startTime
+        if (hasError) {
+          const errorMessage = errorEvent?.data?.message || 'Unknown error during streaming'
+          markSandboxFailed(convex, sandboxRunId, errorMessage).catch((err) => {
+            console.error('[Convex] Failed to mark sandbox failed:', err)
+          })
+        } else {
+          // Fire and forget - don't block return on Convex writes
+          Promise.all([
+            persistCostData(convex, sandboxRunId, cost, tokenUsage, durationMs),
+            markSandboxSucceeded(convex, sandboxRunId, finalResult),
+          ]).catch((err) => {
+            console.error('[Convex] Failed to persist success state:', err)
+          })
+        }
+      }
+
       if (verbose) {
         console.log('Agent completed successfully')
       }
@@ -834,3 +948,6 @@ if __name__ == "__main__":
     }
   })
 }
+
+// Re-export Convex types for user convenience
+export type { ConvexConfig, ConvexClientInterface } from './convex-integration'
