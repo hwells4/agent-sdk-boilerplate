@@ -83,7 +83,8 @@ export default defineSchema({
     .index("by_status", ["status"])
     .index("by_status_activity", ["status", "lastActivityAt"])
     .index("by_status_startedAt", ["status", "startedAt"])
-    .index("by_createdBy_startedAt", ["createdBy", "startedAt"]),
+    .index("by_createdBy_startedAt", ["createdBy", "startedAt"])
+    .index("by_braintrustTraceId", ["braintrustTraceId"]),
 
   // Artifacts produced by sandbox runs
   artifacts: defineTable({

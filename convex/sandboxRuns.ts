@@ -570,3 +570,337 @@ export const internalCountRecentByUser = internalQuery({
     return recentRuns.length;
   },
 });
+
+// ============================================================================
+// Analytics Queries
+// ============================================================================
+
+/**
+ * Find a sandbox run by its Braintrust trace ID.
+ * Enables correlation between Braintrust traces and Convex execution records.
+ *
+ * @param traceId - The Braintrust trace ID
+ * @returns The sandbox run or null if not found/unauthorized
+ */
+export const getByTraceId = query({
+  args: {
+    traceId: v.string(),
+  },
+  handler: async (ctx, args): Promise<Doc<"sandboxRuns"> | null> => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (identity === null) {
+      return null;
+    }
+
+    // Find sandbox run by trace ID using index for O(1) lookup
+    const run = await ctx.db
+      .query("sandboxRuns")
+      .withIndex("by_braintrustTraceId", (q) => q.eq("braintrustTraceId", args.traceId))
+      .first();
+
+    if (run === null) {
+      return null;
+    }
+
+    // Check user has access to the workspace
+    const membership = await getUserMembership(ctx, run.workspaceId);
+    if (membership === null) {
+      return null;
+    }
+
+    return run;
+  },
+});
+
+/**
+ * Cost analytics aggregate type
+ */
+type CostAnalytics = {
+  totalRuns: number;
+  succeededRuns: number;
+  failedRuns: number;
+  totalClaudeCost: number;
+  totalE2bCost: number;
+  totalCost: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalCachedTokens: number;
+  avgDurationMs: number;
+  periodStart: number;
+  periodEnd: number;
+};
+
+/**
+ * Get cost analytics for a workspace within a time period.
+ * Aggregates cost, token usage, and execution metrics.
+ *
+ * @param workspaceId - The workspace to get analytics for
+ * @param startTime - Start of the time period (timestamp)
+ * @param endTime - End of the time period (timestamp)
+ * @returns Aggregated cost and execution analytics
+ */
+export const getCostAnalytics = query({
+  args: {
+    workspaceId: v.id("workspaces"),
+    startTime: v.number(),
+    endTime: v.number(),
+  },
+  handler: async (ctx, args): Promise<CostAnalytics | null> => {
+    // Check workspace membership
+    const membership = await getUserMembership(ctx, args.workspaceId);
+    if (membership === null) {
+      return null;
+    }
+
+    // Query sandbox runs for the workspace within time period
+    const runs = await ctx.db
+      .query("sandboxRuns")
+      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
+      .filter((q) =>
+        q.and(
+          q.gte(q.field("startedAt"), args.startTime),
+          q.lte(q.field("startedAt"), args.endTime)
+        )
+      )
+      .collect();
+
+    // Aggregate metrics
+    let totalClaudeCost = 0;
+    let totalE2bCost = 0;
+    let totalCost = 0;
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
+    let totalCachedTokens = 0;
+    let totalDurationMs = 0;
+    let runsWithDuration = 0;
+    let succeededRuns = 0;
+    let failedRuns = 0;
+
+    for (const run of runs) {
+      if (run.status === "succeeded") succeededRuns++;
+      if (run.status === "failed") failedRuns++;
+
+      if (run.cost) {
+        totalClaudeCost += run.cost.claudeCost;
+        totalE2bCost += run.cost.e2bCost;
+        totalCost += run.cost.totalCost;
+      }
+
+      if (run.tokenUsage) {
+        totalInputTokens += run.tokenUsage.inputTokens;
+        totalOutputTokens += run.tokenUsage.outputTokens;
+        totalCachedTokens += run.tokenUsage.cachedTokens ?? 0;
+      }
+
+      if (run.durationMs !== undefined) {
+        totalDurationMs += run.durationMs;
+        runsWithDuration++;
+      }
+    }
+
+    return {
+      totalRuns: runs.length,
+      succeededRuns,
+      failedRuns,
+      totalClaudeCost,
+      totalE2bCost,
+      totalCost,
+      totalInputTokens,
+      totalOutputTokens,
+      totalCachedTokens,
+      avgDurationMs: runsWithDuration > 0 ? totalDurationMs / runsWithDuration : 0,
+      periodStart: args.startTime,
+      periodEnd: args.endTime,
+    };
+  },
+});
+
+/**
+ * Execution trends data point
+ */
+type ExecutionTrend = {
+  timestamp: number;
+  runs: number;
+  succeeded: number;
+  failed: number;
+  avgDurationMs: number;
+  totalCost: number;
+};
+
+/**
+ * Get execution trends for a workspace over time.
+ * Returns daily aggregates for the specified time period.
+ *
+ * @param workspaceId - The workspace to get trends for
+ * @param startTime - Start of the time period (timestamp)
+ * @param endTime - End of the time period (timestamp)
+ * @param bucketSizeMs - Size of each time bucket in ms (default: 1 day)
+ * @returns Array of trend data points
+ */
+export const getExecutionTrends = query({
+  args: {
+    workspaceId: v.id("workspaces"),
+    startTime: v.number(),
+    endTime: v.number(),
+    bucketSizeMs: v.optional(v.number()),
+  },
+  handler: async (ctx, args): Promise<ExecutionTrend[]> => {
+    // Check workspace membership
+    const membership = await getUserMembership(ctx, args.workspaceId);
+    if (membership === null) {
+      return [];
+    }
+
+    const bucketSize = args.bucketSizeMs ?? 24 * 60 * 60 * 1000; // Default: 1 day
+
+    // Query sandbox runs for the workspace within time period
+    const runs = await ctx.db
+      .query("sandboxRuns")
+      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
+      .filter((q) =>
+        q.and(
+          q.gte(q.field("startedAt"), args.startTime),
+          q.lte(q.field("startedAt"), args.endTime)
+        )
+      )
+      .collect();
+
+    // Group by time buckets
+    const buckets = new Map<number, {
+      runs: Doc<"sandboxRuns">[];
+    }>();
+
+    for (const run of runs) {
+      const bucketStart = Math.floor(run.startedAt / bucketSize) * bucketSize;
+      if (!buckets.has(bucketStart)) {
+        buckets.set(bucketStart, { runs: [] });
+      }
+      buckets.get(bucketStart)!.runs.push(run);
+    }
+
+    // Convert buckets to trend data
+    const trends: ExecutionTrend[] = [];
+    for (const [timestamp, bucket] of buckets) {
+      let succeeded = 0;
+      let failed = 0;
+      let totalDuration = 0;
+      let runsWithDuration = 0;
+      let totalCost = 0;
+
+      for (const run of bucket.runs) {
+        if (run.status === "succeeded") succeeded++;
+        if (run.status === "failed") failed++;
+        if (run.durationMs !== undefined) {
+          totalDuration += run.durationMs;
+          runsWithDuration++;
+        }
+        if (run.cost) {
+          totalCost += run.cost.totalCost;
+        }
+      }
+
+      trends.push({
+        timestamp,
+        runs: bucket.runs.length,
+        succeeded,
+        failed,
+        avgDurationMs: runsWithDuration > 0 ? totalDuration / runsWithDuration : 0,
+        totalCost,
+      });
+    }
+
+    // Sort by timestamp
+    trends.sort((a, b) => a.timestamp - b.timestamp);
+
+    return trends;
+  },
+});
+
+/**
+ * Error breakdown by error code
+ */
+type ErrorBreakdown = {
+  code: string;
+  count: number;
+  lastOccurrence: number;
+  sampleMessage: string;
+};
+
+/**
+ * Get error analytics for a workspace.
+ * Returns breakdown of errors by error code.
+ *
+ * @param workspaceId - The workspace to get error analytics for
+ * @param startTime - Start of the time period (timestamp)
+ * @param endTime - End of the time period (timestamp)
+ * @returns Array of error breakdowns
+ */
+export const getErrorAnalytics = query({
+  args: {
+    workspaceId: v.id("workspaces"),
+    startTime: v.number(),
+    endTime: v.number(),
+  },
+  handler: async (ctx, args): Promise<ErrorBreakdown[]> => {
+    // Check workspace membership
+    const membership = await getUserMembership(ctx, args.workspaceId);
+    if (membership === null) {
+      return [];
+    }
+
+    // Query failed sandbox runs
+    const runs = await ctx.db
+      .query("sandboxRuns")
+      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("status"), "failed"),
+          q.gte(q.field("startedAt"), args.startTime),
+          q.lte(q.field("startedAt"), args.endTime)
+        )
+      )
+      .collect();
+
+    // Group by error code
+    const errorMap = new Map<string, {
+      count: number;
+      lastOccurrence: number;
+      sampleMessage: string;
+    }>();
+
+    for (const run of runs) {
+      const code = run.error?.code ?? "unknown";
+      const existing = errorMap.get(code);
+
+      if (!existing) {
+        errorMap.set(code, {
+          count: 1,
+          lastOccurrence: run.startedAt,
+          sampleMessage: run.error?.message ?? "Unknown error",
+        });
+      } else {
+        existing.count++;
+        if (run.startedAt > existing.lastOccurrence) {
+          existing.lastOccurrence = run.startedAt;
+          existing.sampleMessage = run.error?.message ?? "Unknown error";
+        }
+      }
+    }
+
+    // Convert to array
+    const breakdowns: ErrorBreakdown[] = [];
+    for (const [code, data] of errorMap) {
+      breakdowns.push({
+        code,
+        count: data.count,
+        lastOccurrence: data.lastOccurrence,
+        sampleMessage: data.sampleMessage,
+      });
+    }
+
+    // Sort by count descending
+    breakdowns.sort((a, b) => b.count - a.count);
+
+    return breakdowns;
+  },
+});

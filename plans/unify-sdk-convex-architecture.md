@@ -1,6 +1,6 @@
 # Unify SDK and Convex Architecture
 
-**Status**: In Progress (Phases 1-4 Complete)
+**Status**: In Progress (Phases 1-5 Complete)
 **Priority**: P1 - Core Architecture
 **Created**: 2025-01-10
 **Updated**: 2026-01-10
@@ -339,18 +339,29 @@ const result = await runPythonAgentStreaming({
    - Controlled by persistArtifacts config flag
    - Works in agent.ts and sessions.ts
 
-### Phase 5: Analytics (TODO)
+### Phase 5: Analytics & Trace Correlation ✅ COMPLETE
 
-**Goal**: Full analytics support
+**Goal**: Full analytics and Braintrust trace linking
 
-1. **Cost analytics**
-   - Workspace-level cost aggregation queries
-   - Build cost dashboard queries
+1. **Trace correlation** ✅
+   - getByTraceId query for Braintrust->Convex lookup
+   - by_braintrustTraceId index for O(1) trace lookups
+   - Enables correlation from Braintrust dashboard to Convex records
 
-2. **Execution analytics**
-   - Token usage trends
-   - Tool usage patterns
-   - Error rate tracking
+2. **Cost analytics** ✅
+   - getCostAnalytics query aggregates workspace costs
+   - Total Claude/E2B costs, token usage, duration metrics
+   - Time-period filtering for reporting
+
+3. **Execution analytics** ✅
+   - getExecutionTrends query for time-series data
+   - Configurable bucket size (hourly, daily, etc.)
+   - Success/failure rates, average duration, costs over time
+
+4. **Error analytics** ✅
+   - getErrorAnalytics query groups errors by code
+   - Count, last occurrence, sample message per error type
+   - Sorted by frequency for quick issue identification
 
 ### Phase 6: Advanced Features (TODO)
 
@@ -454,8 +465,8 @@ const result = await runPythonAgent({
 | `examples/lib/convex-integration.ts` | NEW: Convex client wrapper + artifact capture helpers | ✅ Done |
 | `examples/lib/sessions.ts` | Add Convex integration + artifact capture for multi-turn | ✅ Done |
 | `examples/lib/constants.ts` | Add STRING_LIMITS, ARTIFACT_LIMITS, sync with Convex | ✅ Done |
-| `convex/schema.ts` | Add cost, stats, result fields to sandboxRuns | ✅ Done (Phase 1) |
-| `convex/sandboxRuns.ts` | Add mutations for SDK integration | ✅ Done (Phase 1) |
+| `convex/schema.ts` | Add cost, stats, result fields, braintrustTraceId index | ✅ Done (Phase 1, 5) |
+| `convex/sandboxRuns.ts` | Add mutations + analytics queries (getCostAnalytics, getExecutionTrends, getErrorAnalytics, getByTraceId) | ✅ Done (Phase 1, 5) |
 | `convex/storage.ts` | NEW: Storage upload URL generation for artifacts | ✅ Done (Phase 4) |
 | `convex/artifacts.ts` | Artifact creation mutations (pre-existing) | ✅ Done (Phase 4) |
 | `convex/lib/constants.ts` | Sync timeouts with SDK | ✅ Done (Phase 1) |
