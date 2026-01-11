@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, internalMutation } from "./_generated/server";
+import { mutation, query, internalMutation } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { getUserMembership, getSandboxRunAccess } from "./lib/authorization";
 
@@ -56,16 +56,40 @@ export const internalGenerateUploadUrl = internalMutation({
 /**
  * Get a URL for downloading a stored file.
  *
- * This validates access via the associated artifact's workspace.
+ * Validates access by finding the artifact that references this storageId
+ * and checking that the user is a member of the artifact's workspace.
  *
  * @param storageId - The storage ID of the file
  * @returns A URL for downloading the file, or null if not found/unauthorized
  */
-export const getDownloadUrl = mutation({
+export const getDownloadUrl = query({
   args: {
     storageId: v.id("_storage"),
   },
   handler: async (ctx, args): Promise<string | null> => {
+    // Check user is authenticated
+    const identity = await ctx.auth.getUserIdentity();
+    if (identity === null) {
+      return null;
+    }
+
+    // Find the artifact that references this storage ID
+    const artifact = await ctx.db
+      .query("artifacts")
+      .withIndex("by_storageId", (q) => q.eq("storageId", args.storageId))
+      .first();
+
+    if (artifact === null) {
+      // No artifact references this storage ID
+      return null;
+    }
+
+    // Check user has access to the artifact's workspace
+    const membership = await getUserMembership(ctx, artifact.workspaceId);
+    if (membership === null) {
+      return null;
+    }
+
     return await ctx.storage.getUrl(args.storageId);
   },
 });

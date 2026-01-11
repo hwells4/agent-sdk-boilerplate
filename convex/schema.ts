@@ -84,7 +84,8 @@ export default defineSchema({
     .index("by_status_activity", ["status", "lastActivityAt"])
     .index("by_status_startedAt", ["status", "startedAt"])
     .index("by_createdBy_startedAt", ["createdBy", "startedAt"])
-    .index("by_braintrustTraceId", ["braintrustTraceId"]),
+    .index("by_braintrustTraceId", ["braintrustTraceId"])
+    .index("by_workspace_startedAt", ["workspaceId", "startedAt"]),
 
   // Artifacts produced by sandbox runs
   artifacts: defineTable({
@@ -105,5 +106,6 @@ export default defineSchema({
     .index("by_run", ["sandboxRunId"])
     .index("by_thread", ["threadId"])
     .index("by_workspace", ["workspaceId"])
-    .index("by_workspace_review", ["workspaceId", "reviewState"]),
+    .index("by_workspace_review", ["workspaceId", "reviewState"])
+    .index("by_storageId", ["storageId"]),
 });

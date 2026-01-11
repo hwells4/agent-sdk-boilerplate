@@ -653,14 +653,13 @@ export const getCostAnalytics = query({
     }
 
     // Query sandbox runs for the workspace within time period
+    // Uses composite index for O(k) query where k = runs in time range
     const runs = await ctx.db
       .query("sandboxRuns")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
-      .filter((q) =>
-        q.and(
-          q.gte(q.field("startedAt"), args.startTime),
-          q.lte(q.field("startedAt"), args.endTime)
-        )
+      .withIndex("by_workspace_startedAt", (q) =>
+        q.eq("workspaceId", args.workspaceId)
+          .gte("startedAt", args.startTime)
+          .lte("startedAt", args.endTime)
       )
       .collect();
 
@@ -754,14 +753,13 @@ export const getExecutionTrends = query({
     const bucketSize = args.bucketSizeMs ?? 24 * 60 * 60 * 1000; // Default: 1 day
 
     // Query sandbox runs for the workspace within time period
+    // Uses composite index for O(k) query where k = runs in time range
     const runs = await ctx.db
       .query("sandboxRuns")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
-      .filter((q) =>
-        q.and(
-          q.gte(q.field("startedAt"), args.startTime),
-          q.lte(q.field("startedAt"), args.endTime)
-        )
+      .withIndex("by_workspace_startedAt", (q) =>
+        q.eq("workspaceId", args.workspaceId)
+          .gte("startedAt", args.startTime)
+          .lte("startedAt", args.endTime)
       )
       .collect();
 
@@ -849,16 +847,15 @@ export const getErrorAnalytics = query({
     }
 
     // Query failed sandbox runs
+    // Uses composite index for time range, then filters status in memory
     const runs = await ctx.db
       .query("sandboxRuns")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("status"), "failed"),
-          q.gte(q.field("startedAt"), args.startTime),
-          q.lte(q.field("startedAt"), args.endTime)
-        )
+      .withIndex("by_workspace_startedAt", (q) =>
+        q.eq("workspaceId", args.workspaceId)
+          .gte("startedAt", args.startTime)
+          .lte("startedAt", args.endTime)
       )
+      .filter((q) => q.eq(q.field("status"), "failed"))
       .collect();
 
     // Group by error code
