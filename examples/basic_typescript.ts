@@ -13,7 +13,7 @@
  */
 
 import 'dotenv/config'
-import { runPythonAgent, runPythonAgentDetailed } from './lib/agent'
+import { runPythonAgent, runPythonAgentDetailed } from '../src/agent'
 
 /**
  * Example 1: Simple agent execution
@@ -323,10 +323,16 @@ async function validateConfiguration() {
   const oauthToken = process.env.CLAUDE_CODE_OAUTH_TOKEN
   const e2bApiKey = process.env.E2B_API_KEY
 
-  console.log('Environment Variables:')
-  console.log('  E2B_TEMPLATE_ID:', templateId ? '✅ Set' : '❌ Missing')
-  console.log('  CLAUDE_CODE_OAUTH_TOKEN:', oauthToken ? '✅ Set' : '❌ Missing')
-  console.log('  E2B_API_KEY:', e2bApiKey ? '✅ Set' : '❌ Missing')
+  const missing: string[] = []
+  if (!templateId) missing.push('E2B template')
+  if (!oauthToken) missing.push('Claude auth')
+  if (!e2bApiKey) missing.push('E2B auth')
+
+  if (missing.length > 0) {
+    console.log(`Missing configuration: ${missing.join(', ')}`)
+  } else {
+    console.log('All required configuration is present.')
+  }
 
   if (!templateId || !oauthToken || !e2bApiKey) {
     console.log('\n⚠️  Configuration incomplete!')
@@ -392,7 +398,7 @@ async function main() {
   console.log('  - Uncomment other examples in main() to test more features')
   console.log('  - Try: npm run streaming (see real-time agent thinking)')
   console.log('  - Try: npm run sse-api (run agents from a web UI)')
-  console.log('  - Read: examples/lib/agent.ts (SDK implementation)')
+  console.log('  - Read: src/agent.ts (SDK implementation)')
   console.log('\nYou\'re ready to build with the Claude Agent SDK!')
   console.log('='.repeat(60))
 }

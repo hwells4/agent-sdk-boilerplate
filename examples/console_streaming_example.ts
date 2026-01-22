@@ -8,7 +8,7 @@
  */
 
 import 'dotenv/config'
-import { runPythonAgentStreaming } from './lib/agent'
+import { runPythonAgentStreaming } from '../src/agent'
 
 async function example1_BasicStreaming() {
   console.log('\n' + '='.repeat(60))

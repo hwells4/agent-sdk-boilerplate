@@ -11,7 +11,7 @@
  *   Adapt this to: pages/api/agent.ts
  */
 
-import { runPythonAgent, runPythonAgentDetailed } from '../lib/agent'
+import { runPythonAgent, runPythonAgentDetailed } from '../src/agent'
 
 // ============================================================================
 // App Router (Next.js 13+)
@@ -92,7 +92,7 @@ export async function GET() {
 
 /*
 import type { NextApiRequest, NextApiResponse } from 'next'
-import { runPythonAgent } from '../../lib/agent'
+import { runPythonAgent } from '../../src/agent'
 
 type ResponseData = {
   result?: string

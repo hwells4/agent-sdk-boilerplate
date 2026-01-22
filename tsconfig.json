@@ -38,6 +38,7 @@
     "skipLibCheck": true
   },
   "include": [
+    "src/**/*.ts",
     "examples/**/*.ts"
   ],
   "exclude": [

@@ -5,6 +5,7 @@
  * trace URL generation for debugging.
  */
 
+import { currentSpan } from 'braintrust'
 import { getBraintrustLogger } from './observability'
 
 export interface AgentError {
@@ -54,21 +55,25 @@ export function createAgentError(
   // Log to Braintrust
   const logger = getBraintrustLogger()
   if (logger) {
-    const currentSpan = logger.getCurrentSpan()
+    const span = currentSpan()
 
     // Log error details
-    if (currentSpan) {
-      currentSpan.log({
-        event: 'error',
-        type,
-        message,
-        stack: agentError.stack,
-        context: agentError.context,
+    if (span) {
+      span.log({
+        error: {
+          type,
+          message,
+          stack: agentError.stack,
+        },
+        metadata: {
+          event: 'error',
+          context: agentError.context,
+        },
       })
 
       // Generate trace URL
       const projectName = process.env.BRAINTRUST_PROJECT_NAME || 'claude-agent-sdk'
-      const traceId = currentSpan.trace_id || currentSpan.id
+      const traceId = span.rootSpanId || span.id
       agentError.traceUrl = `https://braintrust.dev/app/${projectName}/traces/${traceId}`
     }
   }

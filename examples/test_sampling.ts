@@ -3,7 +3,7 @@
  */
 
 import * as dotenv from 'dotenv'
-import { runPythonAgent } from './lib/agent'
+import { runPythonAgent } from '../src/agent'
 
 // Load environment variables
 dotenv.config()

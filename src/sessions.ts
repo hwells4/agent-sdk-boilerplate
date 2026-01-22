@@ -83,9 +83,11 @@ export async function createSession(timeout: number = 600): Promise<Conversation
     // Create conversation-level span
     const span = logger.startSpan({
       name: 'conversation',
-      metadata: {
-        sessionId: session.sessionId,
-        createdAt: session.createdAt.toISOString(),
+      event: {
+        metadata: {
+          sessionId: session.sessionId,
+          createdAt: session.createdAt.toISOString(),
+        }
       }
     })
     session.span = span
@@ -102,7 +104,7 @@ export async function createSession(timeout: number = 600): Promise<Conversation
     timeoutMs: timeout * 1000,
     metadata: {
       sessionId: session.sessionId,
-      traceId: session.traceId,
+      ...(session.traceId ? { traceId: session.traceId } : {}),
     },
   })
 

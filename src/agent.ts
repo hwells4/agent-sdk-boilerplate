@@ -29,7 +29,7 @@
 import { Sandbox } from '@e2b/code-interpreter'
 import { createConsoleStreamHandler, createLineBufferedHandler, StreamCallbacks, StreamEvent, parseStreamEvent } from './streaming'
 import { traceAgentExecution, exportTraceContext, shouldSampleTrace } from './observability'
-import { calculateCost, formatCost, parseTokenUsage } from './cost-tracking'
+import { calculateCost, formatCost, parseTokenUsage, type TokenUsage } from './cost-tracking'
 import { createAgentError, formatAgentError, categorizeError } from './error-tracking'
 import { generatePythonAgentCode } from './python-templates'
 import { DEFAULT_MODEL, E2B_DEFAULTS } from './constants'
@@ -109,7 +109,7 @@ export async function runPythonAgent(config: AgentConfig): Promise<string> {
         timeoutMs: timeout * 1000,
         metadata: {
           prompt: prompt.substring(0, 100), // For debugging
-          traceId: traceContext?.traceId,
+          ...(traceContext?.traceId ? { traceId: traceContext.traceId } : {}),
         },
       })
     } catch (err: unknown) {
@@ -186,7 +186,6 @@ export async function runPythonAgent(config: AgentConfig): Promise<string> {
           `Agent execution failed with exit code ${execution.exitCode}`,
           {
             prompt: prompt.substring(0, 100),
-            sandboxId: sandbox.id,
             executionTime: endTime - startTime,
             stdout: execution.stdout,
             stderr: execution.stderr,
@@ -213,7 +212,7 @@ export async function runPythonAgent(config: AgentConfig): Promise<string> {
 
       // Parse JSON output containing result and usage
       let result = ''
-      let tokenUsage = { promptTokens: 0, completionTokens: 0, cachedTokens: 0 }
+      let tokenUsage: TokenUsage = { promptTokens: 0, completionTokens: 0, cachedTokens: 0 }
 
       try {
         const output = JSON.parse(execution.stdout.trim())
@@ -315,9 +314,7 @@ export async function runPythonAgentDetailed(config: AgentConfig): Promise<Agent
 
     const sandbox = await Sandbox.create(templateId, {
       timeoutMs: timeout * 1000,
-      metadata: {
-        traceId: traceContext?.traceId,
-      },
+      metadata: traceContext?.traceId ? { traceId: traceContext.traceId } : undefined,
     })
 
     try {
@@ -513,7 +510,7 @@ export async function runPythonAgentStreaming(
       timeoutMs: timeout * 1000,
       metadata: {
         prompt: prompt.substring(0, 100),
-        traceId: traceContext?.traceId,
+        ...(traceContext?.traceId ? { traceId: traceContext.traceId } : {}),
       },
     })
 

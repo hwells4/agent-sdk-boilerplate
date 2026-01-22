@@ -7,7 +7,7 @@
  */
 
 import 'dotenv/config'
-import { runPythonAgentStreaming } from './lib/agent'
+import { runPythonAgentStreaming } from '../src/agent'
 
 async function main() {
   console.log('🔍 Testing Streaming Observability\n')

@@ -231,7 +231,7 @@ async function streamingAgentExample() {
   const oauthToken = process.env.CLAUDE_CODE_OAUTH_TOKEN
 
   if (!templateId || !oauthToken) {
-    console.log('⚠️  E2B_TEMPLATE_ID or CLAUDE_CODE_OAUTH_TOKEN not set')
+    console.log('⚠️  Missing required environment configuration')
     console.log('Skipping agent example')
     return
   }

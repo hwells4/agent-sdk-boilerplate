@@ -1,10 +1,52 @@
 {
-  "name": "claude-agent-sdk-experiments",
+  "name": "@hwells4/agent-sdk",
   "version": "0.1.0",
   "description": "Claude Agent SDK running in E2B sandboxes",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./agent": {
+      "types": "./dist/agent.d.ts",
+      "default": "./dist/agent.js"
+    },
+    "./streaming": {
+      "types": "./dist/streaming.d.ts",
+      "default": "./dist/streaming.js"
+    },
+    "./sessions": {
+      "types": "./dist/sessions.d.ts",
+      "default": "./dist/sessions.js"
+    },
+    "./constants": {
+      "types": "./dist/constants.d.ts",
+      "default": "./dist/constants.js"
+    },
+    "./cost-tracking": {
+      "types": "./dist/cost-tracking.d.ts",
+      "default": "./dist/cost-tracking.js"
+    },
+    "./error-tracking": {
+      "types": "./dist/error-tracking.d.ts",
+      "default": "./dist/error-tracking.js"
+    },
+    "./observability": {
+      "types": "./dist/observability.d.ts",
+      "default": "./dist/observability.js"
+    },
+    "./python-templates": {
+      "types": "./dist/python-templates.d.ts",
+      "default": "./dist/python-templates.js"
+    }
+  },
   "scripts": {
     "setup": "./setup.sh",
     "build:template": "cd agents/base && ./scripts/build_dev.sh",
+    "build": "tsc -p tsconfig.build.json",
+    "prepare": "npm run build",
     "example": "tsx examples/basic_typescript.ts",
     "streaming": "tsx examples/streaming_example.ts",
     "console-streaming": "tsx examples/console_streaming_example.ts",
@@ -20,11 +62,13 @@
     "braintrust": "^1.1.1",
     "convex": "^1.31.3",
     "dotenv": "^16.4.5",
-    "express": "^4.18.2"
+    "express": "^4.18.2",
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
     "@types/node": "^20.11.0",
+    "@types/uuid": "^10.0.0",
     "tsx": "^4.7.0",
     "typescript": "^5.3.3"
   }

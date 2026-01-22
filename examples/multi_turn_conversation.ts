@@ -9,15 +9,15 @@
  */
 
 import 'dotenv/config'
-import { createSession, executeTurn, endSession } from './lib/sessions'
+import { createSession, executeTurn, endSession } from '../src/sessions'
 
 async function main() {
   console.log('🗣️  Starting multi-turn conversation with context...\n')
 
   // Create conversation session (creates persistent sandbox)
   const session = await createSession()
-  console.log(`📝 Session ID: ${session.sessionId}`)
-  console.log(`🔧 Sandbox created: ${session.sandbox?.id}\n`)
+  console.log('📝 Session created')
+  console.log('🔧 Sandbox created\n')
 
   try {
     // Turn 1: Initial question
