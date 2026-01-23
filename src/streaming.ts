@@ -208,17 +208,6 @@ class LineBuffer {
     // Return complete lines, filtering out empty ones
     return lines.filter(line => line.trim())
   }
-
-  /**
-   * Flush remaining buffer contents
-   *
-   * @returns Array containing the remaining buffer (if non-empty)
-   */
-  flush(): string[] {
-    const remaining = this.buffer.trim()
-    this.buffer = ''
-    return remaining ? [remaining] : []
-  }
 }
 
 /**

@@ -452,16 +452,3 @@ export function generatePythonAgentCode(
   return generateBasicAgentCode(prompt, options)
 }
 
-/**
- * Type guard to check if PythonAgentOptions indicates streaming mode.
- */
-export function isStreamingMode(options: PythonAgentOptions): boolean {
-  return options.streaming === true
-}
-
-/**
- * Type guard to check if PythonAgentOptions indicates session mode.
- */
-export function isSessionMode(options: PythonAgentOptions): boolean {
-  return options.sessionMode === true
-}

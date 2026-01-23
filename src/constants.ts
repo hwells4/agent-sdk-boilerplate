@@ -25,34 +25,6 @@ export const SUPPORTED_MODELS = {
 export type SupportedModel = typeof SUPPORTED_MODELS[keyof typeof SUPPORTED_MODELS]
 
 // ============================================================================
-// Sandbox Configuration
-// ============================================================================
-
-/**
- * E2B sandbox paths and scripts
- */
-export const SANDBOX_CONFIG = {
-  /** Default working directory inside sandbox */
-  HOME_DIR: '/home/user',
-  /** Main agent script filename */
-  AGENT_SCRIPT: 'agent.py',
-  /** Streaming agent script filename */
-  STREAMING_SCRIPT: 'streaming_agent.py',
-  /** Python interpreter command */
-  PYTHON_COMMAND: 'python3',
-} as const
-
-/**
- * Full path to the agent script
- */
-export const AGENT_SCRIPT_PATH = `${SANDBOX_CONFIG.HOME_DIR}/${SANDBOX_CONFIG.AGENT_SCRIPT}` as const
-
-/**
- * Full path to the streaming agent script
- */
-export const STREAMING_SCRIPT_PATH = `${SANDBOX_CONFIG.HOME_DIR}/${SANDBOX_CONFIG.STREAMING_SCRIPT}` as const
-
-// ============================================================================
 // Default Allowed Tools
 // ============================================================================
 
