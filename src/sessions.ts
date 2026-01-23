@@ -21,6 +21,7 @@ import { AgentConfig } from './agent'
 const SESSION_TTL_MS = 30 * 60 * 1000  // 30 minutes
 const CLEANUP_INTERVAL_MS = 60 * 1000  // Check every minute
 const MAX_ACTIVE_SESSIONS = 100  // Maximum concurrent sessions to prevent resource exhaustion
+const MAX_CONVERSATION_HISTORY = 100  // Maximum conversation turns to retain (circular buffer)
 
 export interface ConversationSession {
   sessionId: string
@@ -34,8 +35,6 @@ export interface ConversationSession {
 }
 
 export interface SessionHooks {
-  // Called before each tool use - return false to block
-  onPreToolUse?: (toolName: string, toolInput: Record<string, unknown>) => Promise<boolean>
   // Called after each tool use
   onPostToolUse?: (toolName: string, toolResult: string) => Promise<void>
   // Called to determine if agent should stop (e.g., task completion check)
@@ -43,6 +42,22 @@ export interface SessionHooks {
 }
 
 const activeSessions = new Map<string, ConversationSession>()
+
+/**
+ * Trim conversation history to maintain circular buffer behavior.
+ * When history exceeds MAX_CONVERSATION_HISTORY, removes oldest entries.
+ *
+ * @param session - Session whose history to trim
+ * @returns Number of entries removed (0 if no trimming needed)
+ */
+function trimConversationHistory(session: ConversationSession): number {
+  const overflow = session.conversationHistory.length - MAX_CONVERSATION_HISTORY
+  if (overflow > 0) {
+    session.conversationHistory.splice(0, overflow)
+    return overflow
+  }
+  return 0
+}
 
 // Periodic cleanup of expired sessions
 setInterval(async () => {
@@ -181,7 +196,6 @@ export async function executeTurn(
 
     // Build hooks configuration for Python
     const hooksConfig = {
-      hasPreToolUse: !!hooks?.onPreToolUse,
       hasPostToolUse: !!hooks?.onPostToolUse,
       hasShouldStop: !!hooks?.shouldStop,
     }
@@ -283,9 +297,7 @@ asyncio.run(main())
             try {
               const event = JSON.parse(line)
 
-              if (event.event === 'tool_use' && hooks?.onPreToolUse) {
-                // Note: In this implementation, we log but can't block mid-execution
-                // Future: Use interrupt() for real-time blocking
+              if (event.event === 'tool_use') {
                 toolUses.push({ name: event.name, input: event.input })
               }
 
@@ -327,12 +339,16 @@ asyncio.run(main())
       }
     }
 
-    // Store in conversation history
+    // Store in conversation history (circular buffer - removes oldest if at limit)
     session.conversationHistory.push({
       turnId,
       prompt,
       response: result,
     })
+    const trimmed = trimConversationHistory(session)
+    if (trimmed > 0) {
+      console.log(`[Session ${sessionId}] Trimmed ${trimmed} oldest conversation entries (limit: ${MAX_CONVERSATION_HISTORY})`)
+    }
 
     if (span) {
       span.log({ output: result })
