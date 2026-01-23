@@ -12,6 +12,33 @@
  * - session: Emits tool events and supports conversation context (executeTurn)
  */
 
+// Re-export DEFAULT_ALLOWED_TOOLS for consumers who previously imported from this module
+export { DEFAULT_ALLOWED_TOOLS } from './constants'
+
+/**
+ * Maximum allowed prompt length (100KB)
+ */
+const MAX_PROMPT_LENGTH = 100_000
+
+/**
+ * Regex pattern for invalid control characters (excluding tab, newline, carriage return)
+ */
+const INVALID_CONTROL_CHARS = /[\x00-\x08\x0B\x0C\x0E-\x1F]/
+
+/**
+ * Validate prompt input for security and sanity.
+ *
+ * @throws {Error} if prompt exceeds length limit or contains invalid characters
+ */
+export function validatePrompt(prompt: string): void {
+  if (prompt.length > MAX_PROMPT_LENGTH) {
+    throw new Error(`Prompt too long: ${prompt.length} characters exceeds limit of ${MAX_PROMPT_LENGTH}`)
+  }
+  if (INVALID_CONTROL_CHARS.test(prompt)) {
+    throw new Error('Prompt contains invalid control characters')
+  }
+}
+
 /**
  * Options for Python agent code generation.
  */
@@ -45,20 +72,6 @@ export interface PythonAgentOptions {
    */
   turnId?: number
 }
-
-/**
- * Default allowed tools for Claude agent execution.
- */
-export const DEFAULT_ALLOWED_TOOLS = [
-  'Read',
-  'Write',
-  'Edit',
-  'Bash',
-  'Glob',
-  'Grep',
-  'WebFetch',
-  'WebSearch',
-]
 
 /**
  * Generate the common Python imports for Claude agent code.
@@ -425,6 +438,9 @@ export function generatePythonAgentCode(
   prompt: string,
   options: PythonAgentOptions = {}
 ): string {
+  // Validate prompt before generating code
+  validatePrompt(prompt)
+
   if (options.streaming) {
     return generateStreamingAgentCode(prompt)
   }
