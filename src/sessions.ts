@@ -20,6 +20,7 @@ import { AgentConfig } from './agent'
 // Session TTL and cleanup configuration
 const SESSION_TTL_MS = 30 * 60 * 1000  // 30 minutes
 const CLEANUP_INTERVAL_MS = 60 * 1000  // Check every minute
+const MAX_ACTIVE_SESSIONS = 100  // Maximum concurrent sessions to prevent resource exhaustion
 
 export interface ConversationSession {
   sessionId: string
@@ -67,8 +68,17 @@ setInterval(async () => {
  *
  * @param timeout - Sandbox timeout in seconds (default: 600 = 10 minutes)
  * @returns New session object
+ * @throws Error if MAX_ACTIVE_SESSIONS limit is exceeded
  */
 export async function createSession(timeout: number = 600): Promise<ConversationSession> {
+  // Check session limit to prevent resource exhaustion
+  if (activeSessions.size >= MAX_ACTIVE_SESSIONS) {
+    throw new Error(
+      `Maximum active sessions limit (${MAX_ACTIVE_SESSIONS}) exceeded. ` +
+      `Please end existing sessions before creating new ones.`
+    )
+  }
+
   const now = Date.now()
   const session: ConversationSession = {
     sessionId: uuidv4(),
