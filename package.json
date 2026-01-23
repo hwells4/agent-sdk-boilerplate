@@ -4,6 +4,10 @@
   "description": "Claude Agent SDK running in E2B sandboxes",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "sideEffects": [
+    "./dist/observability.js",
+    "./dist/sessions.js"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
