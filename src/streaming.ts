@@ -5,10 +5,15 @@
  * agent responses streamed from E2B sandboxes.
  */
 
+// Re-export canonical TokenUsage from cost-tracking for consumers
+export { type TokenUsage } from './cost-tracking'
+
 /**
- * Token usage information from Claude API
+ * Raw token usage format from Python agent JSON output.
+ * Uses snake_case to match the Python SDK's output format.
+ * Use TokenUsage (from cost-tracking) for TypeScript-side calculations.
  */
-export interface TokenUsage {
+export interface RawTokenUsage {
   input_tokens: number
   output_tokens: number
   cache_read_input_tokens: number
@@ -24,7 +29,7 @@ export type StreamEvent =
   | { type: 'tool_use'; data: { id: string; name: string; input: unknown } }
   | { type: 'tool_result'; data: { tool_use_id: string; content: string; is_error?: boolean } }
   | { type: 'error'; data: { error: string; message: string } }
-  | { type: 'result'; data: { result: string; duration_ms: number; cost: number; usage?: TokenUsage } }
+  | { type: 'result'; data: { result: string; duration_ms: number; cost: number; usage?: RawTokenUsage } }
   | { type: 'complete'; data: { status: string; result?: string } }
 
 /**
